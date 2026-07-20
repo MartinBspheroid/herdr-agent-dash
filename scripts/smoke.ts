@@ -22,7 +22,7 @@ export async function runSmoke(): Promise<void> {
   const scripts = packageJson.scripts as Record<string, unknown>;
   const requiredManifestFields = [
     'id = "dev.agent-board"',
-    'placement = "popup"',
+    'placement = "overlay"',
     'placement = "tab"',
   ];
   for (const field of requiredManifestFields) {
