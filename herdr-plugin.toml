@@ -1,0 +1,33 @@
+id = "dev.agent-board"
+name = "Herdr Agent Board"
+version = "0.1.0"
+min_herdr_version = "0.7.4"
+description = "Live agent state, activity, location, and Git context in one board"
+platforms = ["linux", "macos"]
+
+[[build]]
+command = ["bun", "install", "--frozen-lockfile"]
+
+[[actions]]
+id = "open"
+title = "Open Agent Board"
+command = ["bun", "run", "scripts/open-board-pane.ts", "popup"]
+
+[[actions]]
+id = "open-tab"
+title = "Open Agent Board in Tab"
+command = ["bun", "run", "scripts/open-board-pane.ts", "tab"]
+
+[[panes]]
+id = "board-popup"
+title = "Agent Board"
+placement = "popup"
+width = "90%"
+height = "85%"
+command = ["bun", "run", "src/main.tsx", "--mode", "popup"]
+
+[[panes]]
+id = "board-tab"
+title = "Agent Board"
+placement = "tab"
+command = ["bun", "run", "src/main.tsx", "--mode", "tab"]
