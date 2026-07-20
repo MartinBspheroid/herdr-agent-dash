@@ -33,9 +33,74 @@ bun run start:popup
 
 The plugin reads `HERDR_SOCKET_PATH`, `HERDR_BIN_PATH`, and `HERDR_PLUGIN_CONFIG_DIR` from the host environment. With a socket it uses bounded NDJSON snapshot/event synchronization; otherwise it uses the bounded CLI fallback for one-shot requests. `HERDR_SOCKET_PATH` must point at the supported host socket when running the live board.
 
-## Install/link
+## Install the plugin
 
-Link the checkout with `herdr plugin link .`, then open either the `dev.agent-board.open` popup action or the `open-tab` action described in [herdr-plugin.toml](herdr-plugin.toml). Remove the linked plugin with `herdr plugin unlink dev.agent-board`.
+Herdr 0.7.4 or newer is required:
+
+```bash
+herdr --version
+```
+
+### Install from GitHub
+
+Install the published plugin directly from its public GitHub repository:
+
+```bash
+herdr plugin install MartinBspheroid/herdr-agent-dash --yes
+```
+
+Inspect the installed plugin and open the popup:
+
+```bash
+herdr plugin list --plugin dev.agent-board --json
+herdr plugin action invoke open --plugin dev.agent-board
+```
+
+Use the tab action when you want the board in a persistent Herdr tab:
+
+```bash
+herdr plugin action invoke open-tab --plugin dev.agent-board
+```
+
+The repository is tagged with the `herdr-plugin` GitHub topic and can also be discovered through the [Herdr plugin marketplace](https://herdr.dev/plugins/). Marketplace indexing is automatic and may take a short time after a repository or topic change.
+
+### Link a local checkout
+
+For development, link the checkout instead of installing a managed GitHub copy:
+
+```bash
+herdr plugin link .
+herdr plugin list --plugin dev.agent-board --json
+herdr plugin action invoke open --plugin dev.agent-board
+```
+
+Unlink it when finished:
+
+```bash
+herdr plugin unlink dev.agent-board
+```
+
+`herdr plugin link` leaves the checkout in place. `herdr plugin uninstall` removes a Herdr-managed GitHub installation and its managed checkout.
+
+## Open with a keybinding
+
+Herdr can invoke the installed plugin action from `~/.config/herdr/config.toml`. Add this custom command to bind `Ctrl+B`, then `Shift+O` to the Agent Board popup:
+
+```toml
+[[keys.command]]
+key = "prefix+shift+o"
+type = "plugin_action"
+command = "dev.agent-board.open"
+description = "Open Agent Board"
+```
+
+Reload the running Herdr server after saving the file:
+
+```bash
+herdr server reload-config
+```
+
+`prefix+o` is already used by Herdr's notification target binding, so the example uses `prefix+shift+o`. See Herdr's [configuration guide](https://herdr.dev/docs/configuration/) for other key syntax and custom command options.
 
 ## Activity semantics
 
