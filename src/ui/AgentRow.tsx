@@ -64,6 +64,7 @@ export function AgentRow({
   return (
     <text
       fg={selected ? '#ffffff' : card.state === 'blocked' ? '#ff6b6b' : '#c7d2e0'}
+      wrapMode="none"
       truncate
     >{`${prefix} ${content}`}</text>
   );

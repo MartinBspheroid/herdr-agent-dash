@@ -54,6 +54,46 @@ describe('OpenTUI board surfaces', () => {
     }
   });
 
+  test('keeps long rows on one line and truncates at the viewport edge', async () => {
+    const setup = await testRender(
+      <AgentRow
+        card={{
+          ...card,
+          workspaceLabel: 'workspace-with-a-very-long-name',
+          tabLabel: 'tab-with-a-very-long-name',
+          paneLabel: 'pane-with-a-very-long-name',
+          activity: {
+            currentSignal: {
+              ...card.activity.currentSignal!,
+              text: 'A long signal that must not wrap into the next table row',
+            },
+            candidates: [],
+          },
+          git: {
+            status: 'ready',
+            repoName: 'repository-with-a-very-long-name',
+            branch: 'feature/with-a-very-long-branch-name',
+          },
+        }}
+        selected
+        visibleColumns={['state', 'agent', 'location', 'signal', 'repository', 'branch']}
+      />,
+      { width: 80, height: 4 },
+    );
+    try {
+      await act(async () => {
+        await setup.flush();
+      });
+      const frame = setup.captureCharFrame();
+      expect(frame.split('\n').filter((line) => line.trim().length > 0)).toHaveLength(1);
+      expect(frame).toContain('…');
+    } finally {
+      act(() => {
+        setup.renderer.destroy();
+      });
+    }
+  });
+
   test('renders connection health and actionable notices', async () => {
     const snapshot: AgentBoardSnapshot = {
       connection: 'stale',

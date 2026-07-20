@@ -54,7 +54,9 @@ export function App({
 
   const table = (
     <box border borderStyle="single" flexDirection="column" flexGrow={1}>
-      <text fg="#9aa7b6">{formatHeader(config.view.visibleColumns)}</text>
+      <text fg="#9aa7b6" wrapMode="none" truncate>
+        {formatHeader(config.view.visibleColumns)}
+      </text>
       {snapshot.visibleAgents.length === 0 ? (
         <text>{snapshot.message ?? 'No agents match the current filter'}</text>
       ) : (
