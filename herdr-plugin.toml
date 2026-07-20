@@ -23,8 +23,6 @@ id = "board-popup"
 title = "Agent Board"
 # Popup is selected by the open action's CLI placement override; manifest pane defaults use overlay.
 placement = "overlay"
-width = "90%"
-height = "85%"
 command = ["bun", "run", "src/main.tsx", "--mode", "popup"]
 
 [[panes]]

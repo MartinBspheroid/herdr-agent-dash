@@ -2,6 +2,8 @@ import { BunProcessRunner } from '@/app/runtime';
 
 const PLUGIN_ID = 'dev.agent-board';
 const COMMAND_TIMEOUT_MS = 15_000;
+const POPUP_WIDTH = '90%';
+const POPUP_HEIGHT = '85%';
 
 type PaneMode = 'popup' | 'tab';
 
@@ -11,22 +13,21 @@ export async function openBoardPane(mode: PaneMode): Promise<void> {
   const placement = mode === 'popup' ? 'popup' : 'tab';
   const binaryPath = process.env.HERDR_BIN_PATH ?? 'herdr';
   const runner = new BunProcessRunner();
-  const result = await runner.run(
-    [
-      binaryPath,
-      'plugin',
-      'pane',
-      'open',
-      '--plugin',
-      PLUGIN_ID,
-      '--entrypoint',
-      entrypoint,
-      '--placement',
-      placement,
-      '--focus',
-    ],
-    { timeoutMs: COMMAND_TIMEOUT_MS },
-  );
+  const command = [
+    binaryPath,
+    'plugin',
+    'pane',
+    'open',
+    '--plugin',
+    PLUGIN_ID,
+    '--entrypoint',
+    entrypoint,
+    '--placement',
+    placement,
+    '--focus',
+  ];
+  if (mode === 'popup') command.push('--width', POPUP_WIDTH, '--height', POPUP_HEIGHT);
+  const result = await runner.run(command, { timeoutMs: COMMAND_TIMEOUT_MS });
   if (result.timedOut || result.exitCode !== 0) {
     throw new Error(result.stderr.trim() || `Unable to open the ${mode} Agent Board pane`);
   }
