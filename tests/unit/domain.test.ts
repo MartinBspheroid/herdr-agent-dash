@@ -44,6 +44,26 @@ describe('domain semantics', () => {
     expect(sorted.map((item) => item.id)).toEqual(['blocked', 'working']);
   });
 
+  test('attention ordering follows the documented state priority', () => {
+    const sorted = sortCards(
+      [
+        card('unknown', 'unknown', undefined),
+        card('idle', 'idle', undefined),
+        card('working', 'working', undefined),
+        card('done', 'done', undefined),
+        card('blocked', 'blocked', undefined),
+      ],
+      'attention',
+    );
+    expect(sorted.map((item) => item.state)).toEqual([
+      'blocked',
+      'done',
+      'working',
+      'idle',
+      'unknown',
+    ]);
+  });
+
   test('recent sorting prefers the newest observed state', () => {
     const older = { ...card('older', 'working', undefined), stateSince: 10 };
     const newer = { ...card('newer', 'working', undefined), stateSince: 20 };

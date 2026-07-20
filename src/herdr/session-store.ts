@@ -72,6 +72,7 @@ export class LiveSessionStore implements SessionStore {
       if (generation !== this.refreshGeneration) return;
       const parsed = parseSnapshot(payload, 'live');
       if (!parsed.ok) throw new BoardError('protocol_malformed', parsed.message);
+      if (this.disposed) return;
       const next = parsed.snapshot;
       if (next.protocolVersion !== undefined && next.protocolVersion < MINIMUM_PROTOCOL_VERSION) {
         const message = `Herdr protocol ${next.protocolVersion} is unsupported; update Herdr to a compatible release`;
@@ -154,7 +155,7 @@ export class LiveSessionStore implements SessionStore {
       try {
         const events = await this.transport.subscribe(EVENT_SUBSCRIPTIONS);
         await this.refresh();
-        this.setSnapshot({ ...this.snapshot, connection: 'live' });
+        if (!this.monitoring || this.disposed) break;
         attempt = 0;
         for await (const event of events) {
           if (!this.monitoring || this.disposed) break;
@@ -178,9 +179,6 @@ export class LiveSessionStore implements SessionStore {
       const delay = RECONNECT_DELAYS_MS[Math.min(attempt, RECONNECT_DELAYS_MS.length - 1)] ?? 5_000;
       attempt += 1;
       await Promise.race([wait(delay), this.stopped]);
-      if (this.monitoring && !this.disposed) {
-        await this.refresh().catch(() => undefined);
-      }
       if (attempt >= RECONNECT_DELAYS_MS.length) {
         this.setSnapshot({
           ...this.snapshot,

@@ -32,6 +32,7 @@ export class NdjsonHerdrTransport implements HerdrTransport {
   private readonly pending = new Map<string, PendingRequest>();
   private events = new AsyncQueue<HerdrEvent>();
   private socketPromise: Promise<Socket> | undefined;
+  private socket: Socket | undefined;
   private sequence = 0;
   private closed = false;
   private buffer = '';
@@ -103,9 +104,15 @@ export class NdjsonHerdrTransport implements HerdrTransport {
   }
 
   private async connect(): Promise<Socket> {
-    if (this.socketPromise !== undefined) return this.socketPromise;
+    if (this.socketPromise !== undefined) {
+      const socket = await this.socketPromise;
+      if (!socket.destroyed) return socket;
+      this.socketPromise = undefined;
+    }
+    if (this.closed) throw new BoardError('transport_closed', 'Herdr transport is closed');
     this.socketPromise = new Promise<Socket>((resolve, reject) => {
       const socket = createConnection({ path: this.socketPath });
+      this.socket = socket;
       socket.setEncoding('utf8');
       socket.on('connect', () => resolve(socket));
       socket.on('data', (data: string) => this.handleData(data));
@@ -118,6 +125,7 @@ export class NdjsonHerdrTransport implements HerdrTransport {
         this.disconnectCount += 1;
         this.events.close();
         this.buffer = '';
+        this.socket = undefined;
         if (!this.closed) {
           this.events = new AsyncQueue<HerdrEvent>(
             this.options.maxEventQueue ?? DEFAULT_MAX_EVENT_QUEUE,
@@ -142,10 +150,13 @@ export class NdjsonHerdrTransport implements HerdrTransport {
     const maxFrameBytes = this.options.maxFrameBytes ?? DEFAULT_MAX_FRAME_BYTES;
     if (Buffer.byteLength(this.buffer, 'utf8') > maxFrameBytes && !this.buffer.includes('\n')) {
       this.frameLimitCount += 1;
-      this.lastError = 'Herdr frame exceeded the size limit';
-      this.rejectPending(
-        new BoardError('transport_frame_too_large', 'Herdr frame exceeded the size limit'),
+      const error = new BoardError(
+        'transport_frame_too_large',
+        'Herdr frame exceeded the size limit',
       );
+      this.lastError = error.message;
+      this.rejectPending(error);
+      this.socket?.destroy();
       this.socketPromise = undefined;
       return;
     }
@@ -155,11 +166,14 @@ export class NdjsonHerdrTransport implements HerdrTransport {
       if (line.trim().length === 0) continue;
       if (Buffer.byteLength(line, 'utf8') > maxFrameBytes) {
         this.frameLimitCount += 1;
-        this.lastError = 'Herdr frame exceeded the size limit';
-        this.rejectPending(
-          new BoardError('transport_frame_too_large', 'Herdr frame exceeded the size limit'),
+        const error = new BoardError(
+          'transport_frame_too_large',
+          'Herdr frame exceeded the size limit',
         );
-        continue;
+        this.lastError = error.message;
+        this.rejectPending(error);
+        this.socket?.destroy();
+        return;
       }
       const parsed = parseProtocolLine(line);
       if (parsed === undefined) continue;
@@ -185,9 +199,10 @@ export class NdjsonHerdrTransport implements HerdrTransport {
         const accepted = this.events.push(parsed);
         if (!accepted) {
           this.queueOverflowCount += 1;
-          this.lastError = 'Herdr event queue is full';
-          this.rejectPending(new BoardError('transport_overloaded', 'Herdr event queue is full'));
-          this.events.close();
+          const error = new BoardError('transport_overloaded', 'Herdr event queue is full');
+          this.lastError = error.message;
+          this.rejectPending(error);
+          this.socket?.destroy();
         }
       }
     }

@@ -125,6 +125,38 @@ describe('OpenTUI board surfaces', () => {
     }
   });
 
+  test('does not show a recovered socket error beside a live connection', async () => {
+    const setup = await testRender(
+      <StatusBar
+        snapshot={{
+          connection: 'live',
+          agents: [card],
+          visibleAgents: [card],
+          selectedAgentId: card.id,
+          attentionCount: 1,
+          filter: 'all',
+          sort: 'attention',
+          search: '',
+          generatedAt: 1,
+        }}
+        notice="This socket has been ended by the other party"
+      />,
+      { width: 100, height: 6 },
+    );
+    try {
+      await act(async () => {
+        await setup.flush();
+      });
+      const frame = setup.captureCharFrame();
+      expect(frame).toContain('LIVE');
+      expect(frame).not.toContain('socket has been ended');
+    } finally {
+      act(() => {
+        setup.renderer.destroy();
+      });
+    }
+  });
+
   test('removes terminal display controls before rendering row content', async () => {
     const setup = await testRender(
       <AgentRow

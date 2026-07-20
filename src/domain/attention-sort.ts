@@ -33,12 +33,12 @@ function attentionRank(card: AgentCard): number {
     case 'blocked':
       return 0;
     case 'done':
-      return card.reviewed ? 5 : 1;
-    case 'unknown':
-      return 2;
+      return 1;
     case 'working':
-      return 3;
+      return 2;
     case 'idle':
+      return 3;
+    case 'unknown':
       return 4;
   }
 }

@@ -53,6 +53,19 @@ describe('live session store', () => {
     await store.dispose();
   });
 
+  test('does not report live between a dropped stream and its replacement subscription', async () => {
+    const transport = new ReconnectingTransport();
+    const store = new LiveSessionStore(transport, new SystemClock());
+    await store.start();
+    await waitFor(() => store.getSnapshot().connection === 'stale', 40, 10);
+    expect(transport.snapshots).toBe(2);
+    expect(transport.subscriptions).toBe(1);
+    await waitFor(() => transport.subscriptions >= 2, 40, 10);
+    await waitFor(() => store.getSnapshot().connection === 'live', 40, 10);
+    expect(transport.snapshots).toBeGreaterThanOrEqual(3);
+    await store.dispose();
+  });
+
   test('does not poll snapshots when the CLI fallback has no event stream', async () => {
     const transport = new NoEventsTransport(fixtureSnapshot);
     const store = new LiveSessionStore(transport, new SystemClock());
@@ -147,7 +160,7 @@ class OrderedSnapshotTransport extends FixtureTransport {
 
 class ReconnectingTransport extends FixtureTransport {
   public snapshots = 0;
-  private subscriptions = 0;
+  public subscriptions = 0;
 
   public constructor() {
     super(fixtureSnapshot);

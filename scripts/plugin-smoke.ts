@@ -164,6 +164,7 @@ async function closePopup(): Promise<void> {
       return;
     } catch (error) {
       lastError = error;
+      if (isPopupAlreadyClosed(error)) return;
     } finally {
       await transport.close();
     }
@@ -172,6 +173,10 @@ async function closePopup(): Promise<void> {
   throw new Error(
     `Unable to close popup: ${lastError instanceof Error ? lastError.message : 'unknown error'}`,
   );
+}
+
+function isPopupAlreadyClosed(error: unknown): boolean {
+  return error instanceof Error && /no popup is open/i.test(error.message);
 }
 
 async function runCommand(

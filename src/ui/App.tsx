@@ -20,6 +20,8 @@ import { layoutForWidth } from '@/ui/layout';
 /** Board mode controls popup close behavior while keeping the view shared. */
 export type BoardMode = 'popup' | 'tab';
 
+const DETAIL_PANEL_WIDTH = 52;
+
 /** Render the responsive keyboard-first board against store and command interfaces. */
 export function App({
   store,
@@ -48,12 +50,20 @@ export function App({
     () => snapshot.agents.find((card) => card.id === snapshot.selectedAgentId),
     [snapshot],
   );
+  const tableLayout = wide
+    ? {
+        flexShrink: 1,
+        flexBasis: 0,
+        minWidth: 0,
+        overflow: 'hidden' as const,
+      }
+    : {};
 
   useEffect(() => store.subscribe(() => setSnapshot(store.getSnapshot())), [store]);
   useEffect(() => setPreview(undefined), [snapshot.selectedAgentId]);
 
   const table = (
-    <box border borderStyle="single" flexDirection="column" flexGrow={1}>
+    <box border borderStyle="single" flexDirection="column" flexGrow={1} {...tableLayout}>
       <text fg="#9aa7b6" wrapMode="none" truncate>
         {formatHeader(config.view.visibleColumns)}
       </text>
@@ -78,6 +88,7 @@ export function App({
       compact={compact}
       compactPathSegments={config.view.compactPathSegments}
       now={snapshot.generatedAt}
+      panelWidth={wide ? DETAIL_PANEL_WIDTH : undefined}
     />
   );
 
@@ -135,7 +146,7 @@ export function App({
           {compact && showDetail ? (
             detail
           ) : wide ? (
-            <box flexDirection="row" flexGrow={1}>
+            <box flexDirection="row" flexGrow={1} width="100%" minWidth={0}>
               {table}
               {showDetail ? detail : null}
             </box>

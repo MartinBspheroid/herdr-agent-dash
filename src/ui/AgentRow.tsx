@@ -49,7 +49,7 @@ export function AgentRow({
             ? '○'
             : '?';
   const values: Readonly<Record<string, string>> = {
-    state: `${marker} ${state}`,
+    state,
     agent: truncateText(safeDisplay(card.displayName, 256), 18),
     location: truncateText(location || '—', 22),
     signal: truncateText(signal, 34),
@@ -57,17 +57,47 @@ export function AgentRow({
     branch: truncateText(branch, 24),
     cwd: compactPath(safeDisplay(card.effectiveCwd ?? '—', 512), compactPathSegments ?? 3),
   };
-  const content = visibleColumns
-    .map((column) => values[column] ?? '')
-    .filter((value) => value.length > 0)
-    .join('  ');
+  const columns = visibleColumns
+    .map((column) => ({ column, value: values[column] ?? '' }))
+    .filter(({ value }) => value.length > 0);
+  const stateColor = stateColorFor(card.state);
   return (
     <text
       fg={selected ? '#ffffff' : card.state === 'blocked' ? '#ff6b6b' : '#c7d2e0'}
       wrapMode="none"
       truncate
-    >{`${prefix} ${content}`}</text>
+    >
+      {`${prefix} `}
+      {columns.map(({ column, value }, index) => (
+        <span key={`${column}-${index}`}>
+          {index > 0 ? '  ' : null}
+          {column === 'state' ? (
+            <>
+              <span fg={stateColor}>{marker}</span>
+              {` ${value}`}
+            </>
+          ) : (
+            value
+          )}
+        </span>
+      ))}
+    </text>
   );
+}
+
+function stateColorFor(state: AgentCard['state']): string {
+  switch (state) {
+    case 'blocked':
+      return '#ff6b6b';
+    case 'done':
+      return '#50fa7b';
+    case 'working':
+      return '#8be9fd';
+    case 'idle':
+      return '#9aa7b6';
+    case 'unknown':
+      return '#ffb86c';
+  }
 }
 
 function safeDisplay(value: string, maxBytes: number): string {
