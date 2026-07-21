@@ -1,28 +1,30 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 
-import type {
-  AgentBoardSnapshot,
-  AgentCard,
-  BoardFilter,
-  BoardSort,
-  CommandService,
-  AgentBoardStore,
-  OutputPreview,
-} from '@/contracts';
+import type { AgentBoardSnapshot, AgentBoardStore, CommandService } from '@/contracts';
 import type { BoardConfig } from '@/config/schema';
-import { AgentRow } from '@/ui/AgentRow';
+import { AgentTable } from '@/ui/AgentTable';
+import {
+  closeBoard,
+  nextFilter,
+  nextSort,
+  runCommand,
+  runFocus,
+  runOutput,
+  type OwnedPreview,
+} from '@/ui/board-actions';
 import { DetailPanel } from '@/ui/DetailPanel';
 import { Help } from '@/ui/Help';
-import { StatusBar } from '@/ui/StatusBar';
 import { layoutForWidth } from '@/ui/layout';
+import { BoardFooter, BoardToolbar, StatusBar, visibleStatusMessage } from '@/ui/StatusBar';
+import { BOARD_COLORS } from '@/ui/theme';
 
 /** Board mode controls popup close behavior while keeping the view shared. */
 export type BoardMode = 'popup' | 'tab';
 
-const DETAIL_PANEL_WIDTH = 52;
+const DETAIL_PANEL_WIDTH = 56;
 
-/** Render the responsive keyboard-first board against store and command interfaces. */
+/** Render the fixed-geometry, keyboard-first board against store and command interfaces. */
 export function App({
   store,
   commands,
@@ -43,54 +45,15 @@ export function App({
   const [preview, setPreview] = useState<OwnedPreview | undefined>();
   const { width } = useTerminalDimensions();
   const layout = layoutForWidth(width);
-  const compact = layout === 'compact';
   const wide = layout === 'wide';
-  const [showDetail, setShowDetail] = useState(config.view.showDetail && !compact);
+  const [showDetail, setShowDetail] = useState(config.view.showDetail && layout !== 'compact');
   const selected = useMemo(
     () => snapshot.agents.find((card) => card.id === snapshot.selectedAgentId),
     [snapshot],
   );
-  const tableLayout = wide
-    ? {
-        flexShrink: 1,
-        flexBasis: 0,
-        minWidth: 0,
-        overflow: 'hidden' as const,
-      }
-    : {};
 
   useEffect(() => store.subscribe(() => setSnapshot(store.getSnapshot())), [store]);
   useEffect(() => setPreview(undefined), [snapshot.selectedAgentId]);
-
-  const table = (
-    <box border borderStyle="single" flexDirection="column" flexGrow={1} {...tableLayout}>
-      <text fg="#9aa7b6" wrapMode="none" truncate>
-        {formatHeader(config.view.visibleColumns)}
-      </text>
-      {snapshot.visibleAgents.length === 0 ? (
-        <text>{snapshot.message ?? 'No agents match the current filter'}</text>
-      ) : (
-        snapshot.visibleAgents.map((card) => (
-          <AgentRow
-            key={card.id}
-            card={card}
-            selected={card.id === snapshot.selectedAgentId}
-            visibleColumns={config.view.visibleColumns}
-            compactPathSegments={config.view.compactPathSegments}
-          />
-        ))
-      )}
-    </box>
-  );
-  const detail = (
-    <DetailPanel
-      card={selected}
-      compact={compact}
-      compactPathSegments={config.view.compactPathSegments}
-      now={snapshot.generatedAt}
-      panelWidth={wide ? DETAIL_PANEL_WIDTH : undefined}
-    />
-  );
 
   useKeyboard((key) => {
     if (searching) {
@@ -123,134 +86,92 @@ export function App({
         setNotice,
       );
     else if (key.name === 'o') void runOutput(selected, commands, setNotice, setPreview);
-    else if (key.name === '?') setShowHelp((value) => !value);
+    else if (key.name === '?') setShowHelp(true);
     else if (key.name === 'q') void closeBoard(commands, setNotice);
   });
 
+  const detail = (
+    <DetailPanel
+      card={selected}
+      compact={layout === 'compact'}
+      compactPathSegments={config.view.compactPathSegments}
+      now={snapshot.generatedAt}
+      panelWidth={wide ? DETAIL_PANEL_WIDTH : undefined}
+      statusMessage={visibleStatusMessage(snapshot, notice)}
+    />
+  );
+
   return (
-    <box flexDirection="column" width="100%" height="100%" padding={1}>
-      <StatusBar snapshot={snapshot} notice={notice} />
-      {searching ? (
-        <input
-          placeholder="Search agents, paths, branches, activity…"
-          focused
-          value={snapshot.search}
-          onInput={(value) => store.setSearch(value)}
-          onSubmit={() => setSearching(false)}
-        />
-      ) : null}
-      {showHelp ? (
-        <Help />
-      ) : (
-        <>
-          {compact && showDetail ? (
-            detail
-          ) : wide ? (
-            <box flexDirection="row" flexGrow={1} width="100%" minWidth={0}>
-              {table}
-              {showDetail ? detail : null}
-            </box>
-          ) : (
-            <>
-              {table}
-              {showDetail ? detail : null}
-            </>
-          )}
-          {preview === undefined || preview.agentId !== selected?.id ? null : (
-            <box border padding={1} flexDirection="column">
-              <text fg="#ffb86c">Recent terminal output · on demand</text>
-              <text>{preview.preview.text}</text>
-            </box>
-          )}
-        </>
-      )}
+    <box
+      width="100%"
+      height="100%"
+      flexDirection="column"
+      border
+      borderStyle="rounded"
+      borderColor={BOARD_COLORS.border}
+      backgroundColor={BOARD_COLORS.canvas}
+      overflow="hidden"
+    >
+      <StatusBar snapshot={snapshot} />
+      <BoardToolbar
+        snapshot={snapshot}
+        notice={notice}
+        searching={searching}
+        onSearch={(value) => store.setSearch(value)}
+        onSubmit={() => setSearching(false)}
+      />
+      <box flexGrow={1} minHeight={0} padding={1} overflow="hidden">
+        {showHelp ? (
+          <Help />
+        ) : !wide && showDetail ? (
+          detail
+        ) : (
+          <box flexDirection="row" flexGrow={1} minWidth={0} gap={1} overflow="hidden">
+            <AgentTable
+              snapshot={snapshot}
+              visibleColumns={config.view.visibleColumns}
+              compactPathSegments={config.view.compactPathSegments}
+              layout={layout}
+            />
+            {wide && showDetail ? detail : null}
+          </box>
+        )}
+        <OutputOverlay preview={preview} selectedId={selected?.id} />
+      </box>
+      <BoardFooter snapshot={snapshot} />
     </box>
   );
 }
 
-function formatHeader(columns: readonly string[]): string {
-  const labels: Readonly<Record<string, string>> = {
-    state: 'STATE',
-    agent: 'AGENT',
-    location: 'LOCATION',
-    signal: 'CURRENT SIGNAL',
-    repository: 'REPOSITORY',
-    branch: 'BRANCH',
-    cwd: 'CWD',
-  };
-  return `   ${columns.map((column) => labels[column] ?? column.toUpperCase()).join('   ')}`;
-}
-
-async function runFocus(
-  card: AgentCard | undefined,
-  store: AgentBoardStore,
-  commands: CommandService,
-  setNotice: (value: string) => void,
-): Promise<void> {
-  if (card === undefined) {
-    setNotice('No agent selected');
-    return;
-  }
-  const result = await commands.focusAgent(card.id);
-  setNotice(result.message);
-  if (result.ok) store.markReviewed(card.id);
-}
-
-async function runCommand(
-  command: () => Promise<{ readonly ok: boolean; readonly message: string }>,
-  setNotice: (value: string) => void,
-): Promise<void> {
-  const result = await command();
-  setNotice(result.message);
-}
-
-async function runOutput(
-  card: AgentCard | undefined,
-  commands: CommandService,
-  setNotice: (value: string) => void,
-  setPreview: (value: OwnedPreview | undefined) => void,
-): Promise<void> {
-  if (card === undefined) {
-    setNotice('No agent selected');
-    return;
-  }
-  const result = await commands.loadRecentOutput(card.id);
-  setNotice(result.message);
-  if (result.ok && result.value !== undefined)
-    setPreview({ agentId: card.id, preview: result.value });
-}
-
-async function closeBoard(
-  commands: CommandService,
-  setNotice: (value: string) => void,
-): Promise<void> {
-  try {
-    await commands.close();
-    process.exit(0);
-  } catch (error) {
-    setNotice(error instanceof Error ? error.message : 'Unable to close the board');
-  }
-}
-
-interface OwnedPreview {
-  readonly agentId: string;
-  readonly preview: OutputPreview;
-}
-
-function nextFilter(filter: BoardFilter): BoardFilter {
-  const values: readonly BoardFilter[] = ['all', 'blocked', 'done', 'working', 'idle', 'unknown'];
-  return values[(values.indexOf(filter) + 1) % values.length] ?? 'all';
-}
-
-function nextSort(sort: BoardSort): BoardSort {
-  const values: readonly BoardSort[] = [
-    'attention',
-    'state',
-    'workspace',
-    'repository',
-    'branch',
-    'agent',
-    'recent',
-  ];
-  return values[(values.indexOf(sort) + 1) % values.length] ?? 'attention';
+function OutputOverlay({
+  preview,
+  selectedId,
+}: {
+  readonly preview: OwnedPreview | undefined;
+  readonly selectedId: string | undefined;
+}): ReactNode {
+  if (preview === undefined || preview.agentId !== selectedId) return null;
+  return (
+    <box
+      position="absolute"
+      bottom={1}
+      left={1}
+      right={1}
+      height={7}
+      border
+      borderStyle="rounded"
+      borderColor={BOARD_COLORS.amber}
+      backgroundColor={BOARD_COLORS.panelRaised}
+      padding={1}
+      flexDirection="column"
+      overflow="hidden"
+    >
+      <text fg={BOARD_COLORS.amber} wrapMode="none">
+        Recent terminal output · on demand
+      </text>
+      <text fg={BOARD_COLORS.text} wrapMode="word" truncate>
+        {preview.preview.text}
+      </text>
+    </box>
+  );
 }

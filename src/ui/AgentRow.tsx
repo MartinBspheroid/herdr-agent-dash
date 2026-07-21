@@ -3,6 +3,9 @@ import type { ReactNode } from 'react';
 import type { AgentCard } from '@/contracts';
 import { compactPath, truncateText } from '@/safety/bounded-text';
 import { sanitizeTerminalText } from '@/safety/sanitize-terminal';
+import type { BoardLayout } from '@/ui/layout';
+import { tableColumns, type TableColumnSpec } from '@/ui/table-layout';
+import { BOARD_COLORS, stateColor } from '@/ui/theme';
 
 /** Default row columns used when configuration is absent or invalid. */
 export const DEFAULT_VISIBLE_COLUMNS = [
@@ -14,19 +17,95 @@ export const DEFAULT_VISIBLE_COLUMNS = [
   'branch',
 ] as const;
 
-/** Render one compact, text-labelled agent row for keyboard scanning. */
+/** Return the stable OpenTUI renderable id used for scroll-to-selection behavior. */
+export function agentRowId(cardId: string): string {
+  return `agent-row-${cardId}`;
+}
+
+/** Render one fixed-column agent row with bounded single-line cells. */
 export function AgentRow({
   card,
   selected,
   visibleColumns = DEFAULT_VISIBLE_COLUMNS,
   compactPathSegments = 3,
+  layout = 'wide',
 }: {
   readonly card: AgentCard;
   readonly selected: boolean;
   readonly visibleColumns?: readonly string[];
   readonly compactPathSegments?: number;
+  readonly layout?: BoardLayout;
 }): ReactNode {
-  const state = card.state.toUpperCase().padEnd(7, ' ');
+  const columns = tableColumns(visibleColumns, layout);
+  const values = rowValues(card, compactPathSegments);
+  const foreground = selected ? BOARD_COLORS.text : BOARD_COLORS.textMuted;
+  return (
+    <box
+      id={agentRowId(card.id)}
+      width="100%"
+      height={1}
+      flexDirection="row"
+      flexShrink={0}
+      overflow="hidden"
+      backgroundColor={selected ? BOARD_COLORS.selected : BOARD_COLORS.panel}
+    >
+      {columns.map((column) => (
+        <TableCell
+          key={column.key}
+          column={column}
+          value={values[column.key] ?? '—'}
+          foreground={foreground}
+          card={card}
+        />
+      ))}
+    </box>
+  );
+}
+
+function TableCell({
+  column,
+  value,
+  foreground,
+  card,
+}: {
+  readonly column: TableColumnSpec;
+  readonly value: string;
+  readonly foreground: string;
+  readonly card: AgentCard;
+}): ReactNode {
+  const layout = column.flexible
+    ? { flexGrow: 1, flexBasis: 0, minWidth: column.width }
+    : {
+        width: column.width,
+        minWidth: column.width,
+        maxWidth: column.width,
+        flexShrink: 0,
+      };
+  if (column.key === 'state') {
+    const color = stateColor(card.state);
+    return (
+      <box flexDirection="row" paddingLeft={1} overflow="hidden" {...layout}>
+        <text fg={color} wrapMode="none">
+          ●
+        </text>
+        <text fg={color} wrapMode="none" truncate>
+          {` ${value}`}
+        </text>
+      </box>
+    );
+  }
+  const cellColor =
+    column.key === 'signal' && card.state === 'unknown' ? BOARD_COLORS.amber : foreground;
+  return (
+    <box paddingLeft={1} overflow="hidden" {...layout}>
+      <text fg={cellColor} width="100%" wrapMode="none" truncate>
+        {value}
+      </text>
+    </box>
+  );
+}
+
+function rowValues(card: AgentCard, compactPathSegments: number): Readonly<Record<string, string>> {
   const signal = safeDisplay(
     `${card.activity.currentSignal?.text ?? 'No reported activity'}${card.activity.currentSignal?.stale ? ' · stale' : ''}`,
     256,
@@ -37,67 +116,15 @@ export function AgentRow({
     .filter((value): value is string => value !== undefined)
     .map((value) => safeDisplay(value, 128))
     .join('/');
-  const prefix = selected ? '▸' : ' ';
-  const marker =
-    card.state === 'blocked'
-      ? '!'
-      : card.state === 'done'
-        ? '✓'
-        : card.state === 'working'
-          ? '●'
-          : card.state === 'idle'
-            ? '○'
-            : '?';
-  const values: Readonly<Record<string, string>> = {
-    state,
-    agent: truncateText(safeDisplay(card.displayName, 256), 18),
-    location: truncateText(location || '—', 22),
-    signal: truncateText(signal, 34),
-    repository: truncateText(repository, 18),
-    branch: truncateText(branch, 24),
-    cwd: compactPath(safeDisplay(card.effectiveCwd ?? '—', 512), compactPathSegments ?? 3),
+  return {
+    state: card.state.toUpperCase(),
+    agent: truncateText(safeDisplay(card.displayName, 256), 32),
+    location: truncateText(location || '—', 48),
+    signal: truncateText(signal, 80),
+    repository: truncateText(repository, 36),
+    branch: truncateText(branch, 52),
+    cwd: compactPath(safeDisplay(card.effectiveCwd ?? '—', 512), compactPathSegments),
   };
-  const columns = visibleColumns
-    .map((column) => ({ column, value: values[column] ?? '' }))
-    .filter(({ value }) => value.length > 0);
-  const stateColor = stateColorFor(card.state);
-  return (
-    <text
-      fg={selected ? '#ffffff' : card.state === 'blocked' ? '#ff6b6b' : '#c7d2e0'}
-      wrapMode="none"
-      truncate
-    >
-      {`${prefix} `}
-      {columns.map(({ column, value }, index) => (
-        <span key={`${column}-${index}`}>
-          {index > 0 ? '  ' : null}
-          {column === 'state' ? (
-            <>
-              <span fg={stateColor}>{marker}</span>
-              {` ${value}`}
-            </>
-          ) : (
-            value
-          )}
-        </span>
-      ))}
-    </text>
-  );
-}
-
-function stateColorFor(state: AgentCard['state']): string {
-  switch (state) {
-    case 'blocked':
-      return '#ff6b6b';
-    case 'done':
-      return '#50fa7b';
-    case 'working':
-      return '#8be9fd';
-    case 'idle':
-      return '#9aa7b6';
-    case 'unknown':
-      return '#ffb86c';
-  }
 }
 
 function safeDisplay(value: string, maxBytes: number): string {
