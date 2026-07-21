@@ -31,13 +31,16 @@ const unknownCard: AgentCard = {
 };
 
 describe('board display shortcuts', () => {
-  test('persists unknown, small, and position toggles from the live keyboard', async () => {
+  test('persists unknown visibility and replaces the popup for geometry toggles', async () => {
     const saved: ViewPreferences[] = [];
+    let geometryCalls = 0;
     const setup = await testRender(
       <App
         store={createFixtureBoardStore([activeCard, unknownCard])}
-        commands={commands}
-        mode="tab"
+        commands={createCommands(() => {
+          geometryCalls += 1;
+        })}
+        mode="popup"
         config={DEFAULT_CONFIG}
         savePreferences={(preferences) => {
           saved.push(preferences);
@@ -56,26 +59,46 @@ describe('board display shortcuts', () => {
       expect(setup.captureCharFrame()).not.toContain('UNKNOWN');
 
       act(() => pressKey(setup.renderer, 's'));
-      await act(async () => setup.flush());
-      expect(setup.captureCharFrame()).not.toContain('REPOSITORY');
-      expect(saved.at(-1)?.compact).toBe(true);
+      await act(async () => {
+        await waitFor(() => geometryCalls === 1);
+        setup.flush();
+      });
+      expect(setup.captureCharFrame()).toContain('REPOSITORY');
+      expect(saved.at(-1)?.compactPopup).toBe(true);
 
       act(() => pressKey(setup.renderer, 'p'));
-      await act(async () => setup.flush());
-      expect(saved.at(-1)?.detailPosition).toBe('vertical');
+      await act(async () => {
+        await waitFor(() => geometryCalls === 2);
+        setup.flush();
+      });
+      expect(saved.at(-1)?.popupOrientation).toBe('vertical');
     } finally {
       act(() => setup.renderer.destroy());
     }
   });
 });
 
-const commands: CommandService = {
-  focusAgent: async () => ({ ok: true, message: 'focused' }),
-  refreshAll: async () => ({ ok: true, message: 'refreshed' }),
-  refreshGit: async () => ({ ok: true, message: 'refreshed' }),
-  loadRecentOutput: async () => ({ ok: false, message: 'unavailable' }),
-  close: async () => undefined,
-};
+function createCommands(onGeometry: () => void): CommandService {
+  return {
+    focusAgent: async () => ({ ok: true, message: 'focused' }),
+    refreshAll: async () => ({ ok: true, message: 'refreshed' }),
+    refreshGit: async () => ({ ok: true, message: 'refreshed' }),
+    loadRecentOutput: async () => ({ ok: false, message: 'unavailable' }),
+    applyPopupGeometry: async () => {
+      onGeometry();
+      return { ok: true, message: 'applying' };
+    },
+    close: async () => undefined,
+  };
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (predicate()) return;
+    await new Promise<void>((resolve) => setTimeout(resolve, 1));
+  }
+  throw new Error('condition did not become true');
+}
 
 function pressKey(
   renderer: { readonly keyInput: { processParsedKey(key: ParsedKey): boolean } },

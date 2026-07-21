@@ -174,5 +174,6 @@ export interface CommandService {
   refreshAll(): Promise<CommandResult>;
   refreshGit(stableAgentId: string): Promise<CommandResult>;
   loadRecentOutput(stableAgentId: string): Promise<CommandResult<OutputPreview>>;
+  applyPopupGeometry(): Promise<CommandResult>;
   close(): Promise<void>;
 }

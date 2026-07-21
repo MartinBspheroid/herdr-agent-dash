@@ -18,6 +18,11 @@ id = "open-tab"
 title = "Open Agent Board in Tab"
 command = ["bun", "run", "scripts/open-board-pane.ts", "tab"]
 
+[[actions]]
+id = "apply-popup-geometry"
+title = "Apply Agent Board Popup Size"
+command = ["bun", "run", "scripts/replace-board-popup.ts"]
+
 [[panes]]
 id = "board-popup"
 title = "Agent Board"

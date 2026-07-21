@@ -124,6 +124,43 @@ describe('command service', () => {
     expect(result.message).toContain('popup close failed');
     await session.dispose();
   });
+
+  test('starts the manifest-owned popup replacement action', async () => {
+    const transport = new FixtureTransport(fixtureSnapshot);
+    const session = new LiveSessionStore(transport, new SystemClock());
+    await session.start();
+    const commands = new DefaultCommandService(
+      session,
+      transport,
+      new SafeGitEnricher(new NoopRunner(), new SystemClock()),
+      { popup: true },
+    );
+    const result = await commands.applyPopupGeometry();
+    expect(result.ok).toBe(true);
+    expect(transport.requestCalls.at(-1)).toEqual({
+      method: 'plugin.action.invoke',
+      params: {
+        plugin_id: 'dev.agent-board',
+        action_id: 'apply-popup-geometry',
+      },
+    });
+    await session.dispose();
+  });
+
+  test('does not try to resize a tab as though it were a popup', async () => {
+    const transport = new FixtureTransport(fixtureSnapshot);
+    const session = new LiveSessionStore(transport, new SystemClock());
+    await session.start();
+    const commands = new DefaultCommandService(
+      session,
+      transport,
+      new SafeGitEnricher(new NoopRunner(), new SystemClock()),
+    );
+    const result = await commands.applyPopupGeometry();
+    expect(result.ok).toBe(false);
+    expect(transport.requests).not.toContain('plugin.action.invoke');
+    await session.dispose();
+  });
 });
 
 class FailingFocusTransport extends FixtureTransport {

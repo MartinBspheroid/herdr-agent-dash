@@ -33,7 +33,9 @@ bun run start:popup
 
 The plugin reads `HERDR_SOCKET_PATH`, `HERDR_BIN_PATH`, and `HERDR_PLUGIN_CONFIG_DIR` from the host environment. With a socket it uses bounded NDJSON snapshot/event synchronization; otherwise it uses the bounded CLI fallback for one-shot requests. `HERDR_SOCKET_PATH` must point at the supported host socket when running the live board.
 
-Board shortcuts: `u` shows or hides UNKNOWN rows, `s` toggles the four-column small view, `p` switches the wide detail panel between horizontal and vertical placement, and `t` cycles sorting. The three display preferences persist between sessions.
+Board shortcuts: `u` shows or hides UNKNOWN rows, `s` toggles the whole Herdr popup between expanded and compact outer dimensions, `p` switches the popup between horizontal and vertical shapes, and `t` cycles sorting. These display preferences persist between sessions. In a tab, `s` and `p` save the next popup geometry without resizing the tab.
+
+Herdr 0.7.4 does not expose a live popup move or resize API. The board applies `s` and `p` through the supported lifecycle: save the preference, close the active popup, and reopen it with explicit `plugin.pane.open` dimensions. Herdr centers the session-modal popup; arbitrary popup coordinates are not currently supported.
 
 ## Install the plugin
 

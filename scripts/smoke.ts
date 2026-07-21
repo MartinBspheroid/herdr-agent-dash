@@ -8,6 +8,7 @@ const requiredFiles = [
   'src/main.tsx',
   'src/launcher.ts',
   'scripts/open-board-pane.ts',
+  'scripts/replace-board-popup.ts',
   'src/herdr/session-store.ts',
   'src/git/git-enricher.ts',
   'src/ui/App.tsx',

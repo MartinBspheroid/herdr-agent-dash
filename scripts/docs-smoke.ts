@@ -23,8 +23,8 @@ export async function runDocsSmoke(): Promise<void> {
     'visibleColumns',
     'includeUntracked',
     'showUnknown',
-    'compact',
-    'detailPosition',
+    'compactPopup',
+    'popupOrientation',
     'startup-cache.json',
   ]) {
     if (!configuration.includes(field)) throw new Error(`configuration docs are missing ${field}`);

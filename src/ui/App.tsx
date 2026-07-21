@@ -17,7 +17,7 @@ import {
 } from '@/ui/board-actions';
 import { DetailPanel } from '@/ui/DetailPanel';
 import { Help } from '@/ui/Help';
-import { contentDirection, layoutForWidth } from '@/ui/layout';
+import { layoutForWidth } from '@/ui/layout';
 import { BoardFooter, BoardToolbar, StatusBar } from '@/ui/StatusBar';
 import { BOARD_COLORS } from '@/ui/theme';
 
@@ -49,13 +49,12 @@ export function App({
   const [preview, setPreview] = useState<OwnedPreview | undefined>();
   const initialPreferences: ViewPreferences = {
     showUnknown: config.view.showUnknown,
-    compact: config.view.compact,
-    detailPosition: config.view.detailPosition,
+    compactPopup: config.view.compactPopup,
+    popupOrientation: config.view.popupOrientation,
   };
-  const [preferences, setPreferences] = useState(initialPreferences);
   const preferencesRef = useRef(initialPreferences);
   const { width } = useTerminalDimensions();
-  const layout = layoutForWidth(width, preferences.compact);
+  const layout = layoutForWidth(width);
   const wide = layout === 'wide';
   const [showDetail, setShowDetail] = useState(config.view.showDetail && layout !== 'compact');
   const selected = useMemo(
@@ -86,15 +85,20 @@ export function App({
       else if (mode === 'popup') void closeBoard(commands, setNotice);
     } else if (key.name === 'f') store.setFilter(nextFilter(snapshot.filter));
     else if (key.name === 't') store.setSort(nextSort(snapshot.sort));
-    else if (key.name === 'u' || key.name === 's' || key.name === 'p') {
+    else if (key.name === 'u') {
       const next = preferenceForKey(preferencesRef.current, key.name);
       if (next !== undefined) {
         preferencesRef.current = next;
-        setPreferences(next);
         if (next.showUnknown !== snapshot.showUnknown) store.setShowUnknown(next.showUnknown);
         void savePreferences(next).catch((error: unknown) =>
           setNotice(`Unable to save display preferences: ${errorMessage(error)}`),
         );
+      }
+    } else if (key.name === 's' || key.name === 'p') {
+      const next = preferenceForKey(preferencesRef.current, key.name);
+      if (next !== undefined) {
+        preferencesRef.current = next;
+        void saveAndApplyPopupGeometry(next, mode, commands, savePreferences, setNotice);
       }
     } else if (key.name === 'd') setShowDetail((value) => !value);
     else if (key.name === 'r') void runCommand(commands.refreshAll, setNotice);
@@ -117,9 +121,7 @@ export function App({
       compact={layout === 'compact'}
       compactPathSegments={config.view.compactPathSegments}
       now={snapshot.generatedAt}
-      panelWidth={
-        wide && preferences.detailPosition === 'horizontal' ? DETAIL_PANEL_WIDTH : undefined
-      }
+      panelWidth={wide ? DETAIL_PANEL_WIDTH : undefined}
     />
   );
 
@@ -145,11 +147,11 @@ export function App({
       <box flexGrow={1} minHeight={0} padding={1} overflow="hidden">
         {showHelp ? (
           <Help />
-        ) : !wide && showDetail && !preferences.compact ? (
+        ) : !wide && showDetail ? (
           detail
         ) : (
           <box
-            flexDirection={contentDirection(preferences.detailPosition)}
+            flexDirection="row"
             flexGrow={1}
             minWidth={0}
             minHeight={0}
@@ -162,7 +164,7 @@ export function App({
               compactPathSegments={config.view.compactPathSegments}
               layout={layout}
             />
-            {wide && showDetail && !preferences.compact ? detail : null}
+            {wide && showDetail ? detail : null}
           </box>
         )}
         <OutputOverlay preview={preview} selectedId={selected?.id} />
@@ -170,6 +172,27 @@ export function App({
       <BoardFooter snapshot={snapshot} />
     </box>
   );
+}
+
+async function saveAndApplyPopupGeometry(
+  preferences: ViewPreferences,
+  mode: BoardMode,
+  commands: CommandService,
+  savePreferences: (preferences: ViewPreferences) => Promise<void>,
+  setNotice: (value: string) => void,
+): Promise<void> {
+  try {
+    await savePreferences(preferences);
+  } catch (error) {
+    setNotice(`Unable to save popup preferences: ${errorMessage(error)}`);
+    return;
+  }
+  if (mode !== 'popup') {
+    setNotice('Popup geometry saved; reopen the popup to apply it');
+    return;
+  }
+  const result = await commands.applyPopupGeometry();
+  setNotice(result.message);
 }
 
 function OutputOverlay({

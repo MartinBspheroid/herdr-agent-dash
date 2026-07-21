@@ -10,17 +10,6 @@ describe('responsive layout', () => {
     expect(layoutForWidth(200)).toBe('wide');
   });
 
-  test('allows persistent compact mode to override a wide terminal', () => {
-    expect(layoutForWidth(200, true)).toBe('compact');
-  });
-
-  test('uses stable horizontal and vertical content directions', async () => {
-    const module = await import('@/ui/layout');
-    expect(typeof module.contentDirection).toBe('function');
-    expect(module.contentDirection('horizontal')).toBe('row');
-    expect(module.contentDirection('vertical')).toBe('column');
-  });
-
   test('limits compact mode to the four high-value columns', async () => {
     const module = await import('@/ui/table-layout');
     expect(typeof module.visibleColumnsForLayout).toBe('function');

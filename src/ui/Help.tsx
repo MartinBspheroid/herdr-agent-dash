@@ -20,7 +20,10 @@ export function Help(): ReactNode {
         ↑/k ↓/j navigate · Enter focus · / search · f filter · t sort · d details
       </text>
       <text fg={BOARD_COLORS.text}>
-        u unknown rows · s small mode · p detail position · r refresh · q close · Esc back
+        u unknown rows · s popup size · p popup shape · r refresh · q close · Esc back
+      </text>
+      <text fg={BOARD_COLORS.textMuted}>
+        Popup size and shape reopen the Herdr popup; a tab only saves them for the next popup.
       </text>
       <text fg={BOARD_COLORS.textMuted}>
         Filters cycle through all, blocked, done, working, idle, and unknown.

@@ -37,11 +37,17 @@ describe('configuration validation', () => {
 
   test('validates persistent display preferences independently', () => {
     const result = validateConfig({
-      view: { showUnknown: false, compact: true, detailPosition: 'vertical' },
+      view: { showUnknown: false, compactPopup: true, popupOrientation: 'vertical' },
     });
     expect(result.config.view.showUnknown).toBe(false);
-    expect(result.config.view.compact).toBe(true);
-    expect(result.config.view.detailPosition).toBe('vertical');
+    expect(result.config.view.compactPopup).toBe(true);
+    expect(result.config.view.popupOrientation).toBe('vertical');
+  });
+
+  test('migrates the previous internal-layout preference names to popup geometry', () => {
+    const result = validateConfig({ view: { compact: true, detailPosition: 'vertical' } });
+    expect(result.config.view.compactPopup).toBe(true);
+    expect(result.config.view.popupOrientation).toBe('vertical');
   });
 
   test('persists display preferences without replacing unrelated configuration', async () => {
@@ -57,8 +63,8 @@ describe('configuration validation', () => {
       expect(typeof module.saveViewPreferences).toBe('function');
       await module.saveViewPreferences(path, {
         showUnknown: false,
-        compact: true,
-        detailPosition: 'vertical',
+        compactPopup: true,
+        popupOrientation: 'vertical',
       });
       const saved = JSON.parse(await Bun.file(path).text()) as {
         readonly view: Readonly<Record<string, unknown>>;
@@ -66,8 +72,8 @@ describe('configuration validation', () => {
       };
       expect(saved.view.defaultSort).toBe('state');
       expect(saved.view.showUnknown).toBe(false);
-      expect(saved.view.compact).toBe(true);
-      expect(saved.view.detailPosition).toBe('vertical');
+      expect(saved.view.compactPopup).toBe(true);
+      expect(saved.view.popupOrientation).toBe('vertical');
       expect(saved.git.enabled).toBe(false);
     } finally {
       await removeTempDirectory(directory);

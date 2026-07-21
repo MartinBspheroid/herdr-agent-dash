@@ -10,6 +10,9 @@ import type {
 import type { GitEnricher } from '@/git/git-enricher';
 import { sanitizeTerminalText } from '@/safety/sanitize-terminal';
 
+const PLUGIN_ID = 'dev.agent-board';
+const POPUP_GEOMETRY_ACTION = 'apply-popup-geometry';
+
 /** Safe read-only commands used by the board UI and plugin host. */
 export class DefaultCommandService implements CommandService {
   /** Create commands over the current session, transport, and Git cache. */
@@ -111,6 +114,22 @@ export class DefaultCommandService implements CommandService {
       return { ok: true, message: 'Recent terminal output loaded in memory', value: preview };
     } catch (error) {
       return { ok: false, message: errorMessage(error) };
+    }
+  }
+
+  /** Start the manifest-owned action that replaces the current popup at its saved size. */
+  public async applyPopupGeometry(): Promise<CommandResult> {
+    if (this.options.popup !== true) {
+      return { ok: false, message: 'Popup size changes apply only to the popup board' };
+    }
+    try {
+      await this.transport.request('plugin.action.invoke', {
+        plugin_id: PLUGIN_ID,
+        action_id: POPUP_GEOMETRY_ACTION,
+      });
+      return { ok: true, message: 'Applying popup size' };
+    } catch (error) {
+      return { ok: false, message: `Unable to resize popup: ${errorMessage(error)}` };
     }
   }
 

@@ -49,7 +49,7 @@ export async function runPluginSmoke(options: PluginSmokeOptions = {}): Promise<
       '--plugin',
       PLUGIN_ID,
     ]);
-    for (const actionId of ['open', 'open-tab']) {
+    for (const actionId of ['open', 'open-tab', 'apply-popup-geometry']) {
       if (!actionList.stdout.includes(actionId))
         throw new Error(`Herdr action list did not contain ${actionId}`);
     }

@@ -14,19 +14,37 @@ export interface OwnedPreview {
   readonly preview: OutputPreview;
 }
 
+/** Outer popup dimensions accepted by Herdr's plugin pane open API. */
+export interface PopupGeometry {
+  readonly width: number | string;
+  readonly height: number | string;
+}
+
 /** Apply one persistent display shortcut, leaving unrelated keys to the caller. */
 export function preferenceForKey(
   preferences: ViewPreferences,
   key: string,
 ): ViewPreferences | undefined {
   if (key === 'u') return { ...preferences, showUnknown: !preferences.showUnknown };
-  if (key === 's') return { ...preferences, compact: !preferences.compact };
+  if (key === 's') return { ...preferences, compactPopup: !preferences.compactPopup };
   if (key === 'p')
     return {
       ...preferences,
-      detailPosition: preferences.detailPosition === 'horizontal' ? 'vertical' : 'horizontal',
+      popupOrientation: preferences.popupOrientation === 'horizontal' ? 'vertical' : 'horizontal',
     };
   return undefined;
+}
+
+/** Resolve persistent popup preferences to stable Herdr outer dimensions. */
+export function popupGeometry(preferences: ViewPreferences): PopupGeometry {
+  if (!preferences.compactPopup) {
+    return preferences.popupOrientation === 'vertical'
+      ? { width: '65%', height: '90%' }
+      : { width: '90%', height: '85%' };
+  }
+  return preferences.popupOrientation === 'vertical'
+    ? { width: 80, height: 48 }
+    : { width: 120, height: 32 };
 }
 
 /** Cycle to the next state filter in attention-first order. */

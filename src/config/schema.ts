@@ -18,8 +18,8 @@ export interface BoardConfig {
     readonly compactPathSegments: number;
     readonly showDetail: boolean;
     readonly showUnknown: boolean;
-    readonly compact: boolean;
-    readonly detailPosition: 'horizontal' | 'vertical';
+    readonly compactPopup: boolean;
+    readonly popupOrientation: 'horizontal' | 'vertical';
   };
   readonly git: {
     readonly enabled: boolean;
@@ -45,8 +45,8 @@ export interface BoardConfig {
 /** User-controlled view state persisted between plugin sessions. */
 export interface ViewPreferences {
   readonly showUnknown: boolean;
-  readonly compact: boolean;
-  readonly detailPosition: 'horizontal' | 'vertical';
+  readonly compactPopup: boolean;
+  readonly popupOrientation: 'horizontal' | 'vertical';
 }
 
 /** Diagnostics produced while loading optional configuration. */
@@ -64,8 +64,8 @@ export const DEFAULT_CONFIG: BoardConfig = {
     compactPathSegments: 3,
     showDetail: true,
     showUnknown: true,
-    compact: false,
-    detailPosition: 'horizontal',
+    compactPopup: false,
+    popupOrientation: 'horizontal',
   },
   git: {
     enabled: true,
@@ -142,12 +142,17 @@ export function validateConfig(input: unknown): { config: BoardConfig; warnings:
           'view.showUnknown',
           warnings,
         ),
-        compact: booleanValue(view.compact, DEFAULT_CONFIG.view.compact, 'view.compact', warnings),
-        detailPosition: enumValue(
-          view.detailPosition,
+        compactPopup: booleanValue(
+          view.compactPopup ?? view.compact,
+          DEFAULT_CONFIG.view.compactPopup,
+          'view.compactPopup',
+          warnings,
+        ),
+        popupOrientation: enumValue(
+          view.popupOrientation ?? view.detailPosition,
           ['horizontal', 'vertical'],
-          DEFAULT_CONFIG.view.detailPosition,
-          'view.detailPosition',
+          DEFAULT_CONFIG.view.popupOrientation,
+          'view.popupOrientation',
           warnings,
         ),
       },
