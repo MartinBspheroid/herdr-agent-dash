@@ -33,6 +33,8 @@ bun run start:popup
 
 The plugin reads `HERDR_SOCKET_PATH`, `HERDR_BIN_PATH`, and `HERDR_PLUGIN_CONFIG_DIR` from the host environment. With a socket it uses bounded NDJSON snapshot/event synchronization; otherwise it uses the bounded CLI fallback for one-shot requests. `HERDR_SOCKET_PATH` must point at the supported host socket when running the live board.
 
+Board shortcuts: `u` shows or hides UNKNOWN rows, `s` toggles the four-column small view, `p` switches the wide detail panel between horizontal and vertical placement, and `t` cycles sorting. The three display preferences persist between sessions.
+
 ## Install the plugin
 
 Herdr 0.7.4 or newer is required:
@@ -108,7 +110,7 @@ The board never labels a latest human prompt as current progress by default. Exp
 
 ## Privacy and safety
 
-P0 makes no network requests, persists no raw terminal/transcript text, uses argv-only subprocesses, bounds all external text, strips terminal control sequences, and enables no provider-native transcript adapters. Git errors remain local to one row. See [docs/troubleshooting.md](docs/troubleshooting.md) for stale data and host-version diagnostics.
+P0 makes no network requests, persists no raw terminal/transcript text, uses argv-only subprocesses, bounds all external text, strips terminal control sequences, and enables no provider-native transcript adapters. A short-lived startup cache stores only sanitized display-card fields and always renders them as stale until live synchronization replaces them. Git errors remain local to one row. See [docs/troubleshooting.md](docs/troubleshooting.md) for stale data and host-version diagnostics.
 
 ## Configuration
 

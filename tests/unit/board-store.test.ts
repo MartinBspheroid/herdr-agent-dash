@@ -6,11 +6,78 @@ import { SystemClock } from '@/app/runtime';
 import { AgentProjector } from '@/domain/agent-projector';
 import type { GitEnricher, GitRefreshReason } from '@/git/git-enricher';
 import type { GitContext } from '@/contracts';
+import type { AgentCard } from '@/contracts';
 import { LiveSessionStore } from '@/herdr/session-store';
 import { fixtureSnapshot } from '@tests/fixtures/herdr';
 import { MutableSnapshotTransport } from '@tests/fixtures/session-transports';
 
 describe('renderer-independent board store', () => {
+  test('renders cached cards before the live session starts', () => {
+    const transport = new MutableSnapshotTransport(fixtureSnapshot);
+    const session = new LiveSessionStore(transport, new SystemClock());
+    const git = new RecordingGitEnricher();
+    const projector = new AgentProjector(git, new ActivityEngine([]), new SystemClock());
+    const cached: AgentCard = {
+      id: 'cached-agent',
+      agent: 'Cached',
+      displayName: 'cached',
+      state: 'idle',
+      focused: false,
+      reviewed: false,
+      git: { status: 'stale' },
+      activity: { candidates: [] },
+      connection: 'stale',
+    };
+    const store = new DefaultAgentBoardStore({
+      session,
+      git,
+      projector,
+      clock: new SystemClock(),
+      initialCards: [cached],
+    });
+
+    expect(store.getSnapshot().agents).toEqual([cached]);
+    expect(store.getSnapshot().connection).toBe('connecting');
+  });
+
+  test('hides unknown rows without removing them from the agent count', async () => {
+    const snapshot = {
+      ...fixtureSnapshot,
+      panes: [
+        ...fixtureSnapshot.panes,
+        {
+          id: 'p3',
+          terminal_id: 'term-3',
+          tab_id: 't1',
+          workspace_id: 'w1',
+          agent_id: 'a3',
+          agent: 'Terminal',
+          agent_status: 'unknown',
+        },
+      ],
+      agents: [...fixtureSnapshot.agents, { id: 'a3', name: 'Terminal', status: 'unknown' }],
+    };
+    const transport = new MutableSnapshotTransport(snapshot);
+    const session = new LiveSessionStore(transport, new SystemClock());
+    const git = new RecordingGitEnricher();
+    const projector = new AgentProjector(git, new ActivityEngine([]), new SystemClock());
+    const store = new DefaultAgentBoardStore({
+      session,
+      git,
+      projector,
+      clock: new SystemClock(),
+      showUnknown: false,
+    });
+    await store.start();
+
+    expect(store.getSnapshot().agents).toHaveLength(3);
+    expect(store.getSnapshot().visibleAgents).toHaveLength(2);
+    expect(store.getSnapshot().showUnknown).toBe(false);
+    store.setShowUnknown(true);
+    expect(store.getSnapshot().visibleAgents).toHaveLength(3);
+    await store.dispose();
+  });
+
   test('keeps selection across unrelated updates and reconciles a closed row', async () => {
     const transport = new MutableSnapshotTransport(fixtureSnapshot);
     const session = new LiveSessionStore(transport, new SystemClock());

@@ -17,10 +17,10 @@ export function Help(): ReactNode {
     >
       <text fg={BOARD_COLORS.cyan}>KEYBOARD HELP</text>
       <text fg={BOARD_COLORS.text}>
-        ↑/k ↓/j navigate · Enter focus · / search · f filter · s sort · d details
+        ↑/k ↓/j navigate · Enter focus · / search · f filter · t sort · d details
       </text>
       <text fg={BOARD_COLORS.text}>
-        r refresh all · g refresh Git · o load recent output · q close · Esc back
+        u unknown rows · s small mode · p detail position · r refresh · q close · Esc back
       </text>
       <text fg={BOARD_COLORS.textMuted}>
         Filters cycle through all, blocked, done, working, idle, and unknown.

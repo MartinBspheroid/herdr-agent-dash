@@ -11,6 +11,7 @@ import type { GitEnricher } from '@/git/git-enricher';
 import { AgentProjector } from '@/domain/agent-projector';
 import { matchesSearch } from '@/domain/search';
 import { needsAttention, sortCards } from '@/domain/attention-sort';
+import { connectionMessage } from '@/app/connection-message';
 
 /** Dependencies and policy used to construct the renderer-independent board store. */
 export interface AgentBoardStoreOptions {
@@ -20,17 +21,20 @@ export interface AgentBoardStoreOptions {
   readonly clock: Clock;
   readonly defaultSort?: BoardSort;
   readonly watchdogMs?: number;
+  readonly showUnknown?: boolean;
+  readonly initialCards?: readonly AgentCard[];
 }
 
 /** Renderer-independent board store combining session, Git, activity, and local UI state. */
 export class DefaultAgentBoardStore implements AgentBoardStore {
-  private cards: readonly AgentCard[] = [];
+  private cards: readonly AgentCard[];
   private readonly listeners = new Set<() => void>();
   private readonly stateSince = new Map<string, number>();
   private filter: BoardFilter = 'all';
   private sort: BoardSort;
   private search = '';
   private selectedAgentId: string | undefined;
+  private showUnknown: boolean;
   private rebuildVersion = 0;
   private unsubscribeSession: (() => void) | undefined;
   private unsubscribeGit: (() => void) | undefined;
@@ -45,6 +49,9 @@ export class DefaultAgentBoardStore implements AgentBoardStore {
     this.clock = options.clock;
     this.sort = options.defaultSort ?? 'attention';
     this.watchdogMs = options.watchdogMs ?? 15_000;
+    this.showUnknown = options.showUnknown ?? true;
+    this.cards = options.initialCards ?? [];
+    this.reconcileSelection();
   }
 
   private readonly session: StartableSessionStore;
@@ -74,7 +81,9 @@ export class DefaultAgentBoardStore implements AgentBoardStore {
     const agents = sortCards(this.cards, this.sort);
     const visibleAgents = agents.filter(
       (card) =>
-        (this.filter === 'all' || card.state === this.filter) && matchesSearch(card, this.search),
+        (this.showUnknown || card.state !== 'unknown') &&
+        (this.filter === 'all' || card.state === this.filter) &&
+        matchesSearch(card, this.search),
     );
     const sessionSnapshot = this.session.getSnapshot();
     const selected =
@@ -91,6 +100,7 @@ export class DefaultAgentBoardStore implements AgentBoardStore {
       filter: this.filter,
       sort: this.sort,
       search: this.search,
+      showUnknown: this.showUnknown,
       generatedAt: this.clock.now(),
       message:
         sessionSnapshot.message ?? connectionMessage(sessionSnapshot.connection, agents.length),
@@ -136,6 +146,13 @@ export class DefaultAgentBoardStore implements AgentBoardStore {
   /** Replace the current ordering. */
   public setSort(sort: BoardSort): void {
     this.sort = sort;
+    this.notify();
+  }
+
+  /** Include or exclude unknown terminal rows from the visible board. */
+  public setShowUnknown(showUnknown: boolean): void {
+    this.showUnknown = showUnknown;
+    this.reconcileSelection();
     this.notify();
   }
 
@@ -226,16 +243,4 @@ export class DefaultAgentBoardStore implements AgentBoardStore {
   private notify(): void {
     for (const listener of this.listeners) listener();
   }
-}
-
-function connectionMessage(
-  connection: ReturnType<StartableSessionStore['getSnapshot']>['connection'],
-  agentCount: number,
-): string | undefined {
-  if (connection === 'failed') return 'Unable to connect to Herdr; press r to retry';
-  if (connection === 'incompatible')
-    return 'This Herdr version is incompatible; update Herdr and retry';
-  if (connection === 'connecting') return 'Connecting to Herdr…';
-  if (connection === 'stale') return 'Showing stale data; reconnecting to Herdr…';
-  return agentCount === 0 ? 'No active Herdr agents detected' : undefined;
 }

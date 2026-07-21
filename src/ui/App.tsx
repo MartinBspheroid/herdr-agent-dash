@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 
 import type { AgentBoardSnapshot, AgentBoardStore, CommandService } from '@/contracts';
-import type { BoardConfig } from '@/config/schema';
+import { errorMessage } from '@/app/errors';
+import type { BoardConfig, ViewPreferences } from '@/config/schema';
 import { AgentTable } from '@/ui/AgentTable';
 import {
   closeBoard,
   nextFilter,
   nextSort,
+  preferenceForKey,
   runCommand,
   runFocus,
   runOutput,
@@ -15,7 +17,7 @@ import {
 } from '@/ui/board-actions';
 import { DetailPanel } from '@/ui/DetailPanel';
 import { Help } from '@/ui/Help';
-import { layoutForWidth } from '@/ui/layout';
+import { contentDirection, layoutForWidth } from '@/ui/layout';
 import { BoardFooter, BoardToolbar, StatusBar } from '@/ui/StatusBar';
 import { BOARD_COLORS } from '@/ui/theme';
 
@@ -31,20 +33,29 @@ export function App({
   mode,
   config,
   initialNotice,
+  savePreferences,
 }: {
   readonly store: AgentBoardStore;
   readonly commands: CommandService;
   readonly mode: BoardMode;
   readonly config: BoardConfig;
   readonly initialNotice?: string | undefined;
+  readonly savePreferences: (preferences: ViewPreferences) => Promise<void>;
 }): ReactNode {
   const [snapshot, setSnapshot] = useState<AgentBoardSnapshot>(() => store.getSnapshot());
   const [showHelp, setShowHelp] = useState(false);
   const [searching, setSearching] = useState(false);
   const [notice, setNotice] = useState<string | undefined>(initialNotice);
   const [preview, setPreview] = useState<OwnedPreview | undefined>();
+  const initialPreferences: ViewPreferences = {
+    showUnknown: config.view.showUnknown,
+    compact: config.view.compact,
+    detailPosition: config.view.detailPosition,
+  };
+  const [preferences, setPreferences] = useState(initialPreferences);
+  const preferencesRef = useRef(initialPreferences);
   const { width } = useTerminalDimensions();
-  const layout = layoutForWidth(width);
+  const layout = layoutForWidth(width, preferences.compact);
   const wide = layout === 'wide';
   const [showDetail, setShowDetail] = useState(config.view.showDetail && layout !== 'compact');
   const selected = useMemo(
@@ -74,8 +85,18 @@ export function App({
       else if (showDetail) setShowDetail(false);
       else if (mode === 'popup') void closeBoard(commands, setNotice);
     } else if (key.name === 'f') store.setFilter(nextFilter(snapshot.filter));
-    else if (key.name === 's') store.setSort(nextSort(snapshot.sort));
-    else if (key.name === 'd') setShowDetail((value) => !value);
+    else if (key.name === 't') store.setSort(nextSort(snapshot.sort));
+    else if (key.name === 'u' || key.name === 's' || key.name === 'p') {
+      const next = preferenceForKey(preferencesRef.current, key.name);
+      if (next !== undefined) {
+        preferencesRef.current = next;
+        setPreferences(next);
+        if (next.showUnknown !== snapshot.showUnknown) store.setShowUnknown(next.showUnknown);
+        void savePreferences(next).catch((error: unknown) =>
+          setNotice(`Unable to save display preferences: ${errorMessage(error)}`),
+        );
+      }
+    } else if (key.name === 'd') setShowDetail((value) => !value);
     else if (key.name === 'r') void runCommand(commands.refreshAll, setNotice);
     else if (key.name === 'g')
       void runCommand(
@@ -96,7 +117,9 @@ export function App({
       compact={layout === 'compact'}
       compactPathSegments={config.view.compactPathSegments}
       now={snapshot.generatedAt}
-      panelWidth={wide ? DETAIL_PANEL_WIDTH : undefined}
+      panelWidth={
+        wide && preferences.detailPosition === 'horizontal' ? DETAIL_PANEL_WIDTH : undefined
+      }
     />
   );
 
@@ -122,17 +145,24 @@ export function App({
       <box flexGrow={1} minHeight={0} padding={1} overflow="hidden">
         {showHelp ? (
           <Help />
-        ) : !wide && showDetail ? (
+        ) : !wide && showDetail && !preferences.compact ? (
           detail
         ) : (
-          <box flexDirection="row" flexGrow={1} minWidth={0} gap={1} overflow="hidden">
+          <box
+            flexDirection={contentDirection(preferences.detailPosition)}
+            flexGrow={1}
+            minWidth={0}
+            minHeight={0}
+            gap={1}
+            overflow="hidden"
+          >
             <AgentTable
               snapshot={snapshot}
               visibleColumns={config.view.visibleColumns}
               compactPathSegments={config.view.compactPathSegments}
               layout={layout}
             />
-            {wide && showDetail ? detail : null}
+            {wide && showDetail && !preferences.compact ? detail : null}
           </box>
         )}
         <OutputOverlay preview={preview} selectedId={selected?.id} />

@@ -4,16 +4,18 @@ import type { AgentBoardSnapshot, AgentBoardStore, AgentCard } from '@/contracts
 export function createFixtureBoardStore(cards: readonly AgentCard[]): AgentBoardStore {
   let selectedAgentId = cards[0]?.id;
   let search = '';
+  let showUnknown = true;
   const listeners = new Set<() => void>();
   const snapshot = (): AgentBoardSnapshot => ({
     connection: 'live',
     agents: cards,
-    visibleAgents: cards,
+    visibleAgents: cards.filter((card) => showUnknown || card.state !== 'unknown'),
     selectedAgentId,
     attentionCount: cards.filter((card) => card.state === 'blocked').length,
     filter: 'all',
     sort: 'attention',
     search,
+    showUnknown,
     generatedAt: 1,
   });
   return {
@@ -33,6 +35,10 @@ export function createFixtureBoardStore(cards: readonly AgentCard[]): AgentBoard
     },
     setFilter: () => undefined,
     setSort: () => undefined,
+    setShowUnknown: (value) => {
+      showUnknown = value;
+      for (const listener of listeners) listener();
+    },
     markReviewed: () => undefined,
   };
 }

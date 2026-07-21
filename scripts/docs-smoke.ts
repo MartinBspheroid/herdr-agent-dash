@@ -18,7 +18,15 @@ export async function runDocsSmoke(): Promise<void> {
     if (!readme.includes(command)) throw new Error(`README is missing ${command}`);
   }
   const configuration = await readFile('docs/configuration.md', 'utf8');
-  for (const field of ['defaultMode', 'visibleColumns', 'includeUntracked']) {
+  for (const field of [
+    'defaultMode',
+    'visibleColumns',
+    'includeUntracked',
+    'showUnknown',
+    'compact',
+    'detailPosition',
+    'startup-cache.json',
+  ]) {
     if (!configuration.includes(field)) throw new Error(`configuration docs are missing ${field}`);
   }
 }

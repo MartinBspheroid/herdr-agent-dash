@@ -7,6 +7,7 @@ import {
   objectOrDefault,
   stringArray,
 } from '@/config/validation';
+import { DEFAULT_VISIBLE_COLUMNS, visibleColumnsValue } from '@/config/visible-columns';
 
 /** Supported board configuration, with all runtime defaults materialized. */
 export interface BoardConfig {
@@ -16,6 +17,9 @@ export interface BoardConfig {
     readonly visibleColumns: readonly string[];
     readonly compactPathSegments: number;
     readonly showDetail: boolean;
+    readonly showUnknown: boolean;
+    readonly compact: boolean;
+    readonly detailPosition: 'horizontal' | 'vertical';
   };
   readonly git: {
     readonly enabled: boolean;
@@ -38,16 +42,12 @@ export interface BoardConfig {
   };
 }
 
-/** Columns supported by the renderer and configuration file. */
-export const SUPPORTED_VISIBLE_COLUMNS = [
-  'state',
-  'agent',
-  'location',
-  'signal',
-  'repository',
-  'branch',
-  'cwd',
-] as const;
+/** User-controlled view state persisted between plugin sessions. */
+export interface ViewPreferences {
+  readonly showUnknown: boolean;
+  readonly compact: boolean;
+  readonly detailPosition: 'horizontal' | 'vertical';
+}
 
 /** Diagnostics produced while loading optional configuration. */
 export interface ConfigDiagnostics {
@@ -60,9 +60,12 @@ export const DEFAULT_CONFIG: BoardConfig = {
   view: {
     defaultMode: 'popup',
     defaultSort: 'attention',
-    visibleColumns: ['state', 'agent', 'location', 'signal', 'repository', 'branch'],
+    visibleColumns: DEFAULT_VISIBLE_COLUMNS,
     compactPathSegments: 3,
     showDetail: true,
+    showUnknown: true,
+    compact: false,
+    detailPosition: 'horizontal',
   },
   git: {
     enabled: true,
@@ -131,6 +134,20 @@ export function validateConfig(input: unknown): { config: BoardConfig; warnings:
           view.showDetail,
           DEFAULT_CONFIG.view.showDetail,
           'view.showDetail',
+          warnings,
+        ),
+        showUnknown: booleanValue(
+          view.showUnknown,
+          DEFAULT_CONFIG.view.showUnknown,
+          'view.showUnknown',
+          warnings,
+        ),
+        compact: booleanValue(view.compact, DEFAULT_CONFIG.view.compact, 'view.compact', warnings),
+        detailPosition: enumValue(
+          view.detailPosition,
+          ['horizontal', 'vertical'],
+          DEFAULT_CONFIG.view.detailPosition,
+          'view.detailPosition',
           warnings,
         ),
       },
@@ -211,18 +228,4 @@ export function validateConfig(input: unknown): { config: BoardConfig; warnings:
     },
     warnings,
   };
-}
-
-function visibleColumnsValue(value: unknown, warnings: string[]): readonly string[] {
-  const columns = stringArray(
-    value,
-    DEFAULT_CONFIG.view.visibleColumns,
-    'view.visibleColumns',
-    warnings,
-  );
-  const supported = new Set<string>(SUPPORTED_VISIBLE_COLUMNS);
-  const valid = columns.filter((column) => supported.has(column));
-  if (valid.length !== columns.length)
-    warnings.push('view.visibleColumns: unknown columns were removed');
-  return valid.length > 0 ? valid : DEFAULT_CONFIG.view.visibleColumns;
 }

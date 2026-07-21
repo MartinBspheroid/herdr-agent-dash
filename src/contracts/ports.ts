@@ -135,6 +135,7 @@ export interface AgentBoardSnapshot {
   readonly filter: BoardFilter;
   readonly sort: BoardSort;
   readonly search: string;
+  readonly showUnknown: boolean;
   readonly generatedAt: number;
   readonly message?: string | undefined;
 }
@@ -148,6 +149,7 @@ export interface AgentBoardStore {
   setSearch(value: string): void;
   setFilter(filter: BoardFilter): void;
   setSort(sort: BoardSort): void;
+  setShowUnknown(showUnknown: boolean): void;
   markReviewed(id: string): void;
 }
 

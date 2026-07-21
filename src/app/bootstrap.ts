@@ -1,8 +1,12 @@
 import type { BoardSort, Clock, CommandService, HerdrTransport, SessionStore } from '@/contracts';
 import type { GitDiagnostics } from '@/git/git-enricher';
 import type { TransportDiagnostics } from '@/contracts';
-import type { BoardConfig } from '@/config/schema';
-import { loadConfig } from '@/config/load-config';
+import { dirname, join } from 'node:path';
+
+import type { BoardConfig, ViewPreferences } from '@/config/schema';
+import { configPathFromEnvironment, loadConfig, saveViewPreferences } from '@/config/load-config';
+import { JsonStartupCache } from '@/cache/startup-cache';
+import { errorMessage } from '@/app/errors';
 import { ActivityEngine } from '@/activity/engine';
 import { GitActivityProvider } from '@/activity/git-provider';
 import { MetadataActivityProvider } from '@/activity/metadata-provider';
@@ -26,6 +30,8 @@ export interface BoardRuntime {
   readonly startupNotice?: string | undefined;
   readonly config: BoardConfig;
   readonly mode: 'popup' | 'tab';
+  readonly savePreferences: (preferences: ViewPreferences) => Promise<void>;
+  readonly persistStartupCache: () => Promise<void>;
   readonly getDiagnostics: () => RuntimeDiagnostics;
 }
 
@@ -34,16 +40,30 @@ export interface RuntimeDiagnostics {
   readonly connection: ReturnType<SessionStore['getSnapshot']>['connection'];
   readonly transport?: TransportDiagnostics | undefined;
   readonly git?: GitDiagnostics | undefined;
+  readonly startupCacheError?: string | undefined;
+  readonly preferenceWriteError?: string | undefined;
 }
+
+const STARTUP_CACHE_MAX_AGE_MS = 5 * 60 * 1_000;
+const STARTUP_CACHE_MAX_CARDS = 200;
 
 /** Create a complete board runtime for popup or tab mode. */
 export async function createBoardRuntime(
   requestedMode: 'popup' | 'tab' | undefined,
   clock: Clock = new SystemClock(),
 ): Promise<BoardRuntime> {
-  const { config, diagnostics } = await loadConfig();
-  const mode = requestedMode ?? config.view.defaultMode;
   const runner = new BunProcessRunner();
+  const configPath = configPathFromEnvironment();
+  const startupCache = new JsonStartupCache(join(dirname(configPath), 'startup-cache.json'), {
+    maxAgeMs: STARTUP_CACHE_MAX_AGE_MS,
+    maxCards: STARTUP_CACHE_MAX_CARDS,
+  });
+  const [{ config, diagnostics }, initialCards, compatibility] = await Promise.all([
+    loadConfig(configPath),
+    startupCache.load(clock.now()),
+    checkHerdrCompatibility(runner),
+  ]);
+  const mode = requestedMode ?? config.view.defaultMode;
   const socketPath = process.env.HERDR_SOCKET_PATH?.trim();
   const transport: HerdrTransport =
     socketPath === undefined || socketPath.length === 0
@@ -71,21 +91,49 @@ export async function createBoardRuntime(
     clock,
     defaultSort,
     watchdogMs: config.git.watchdogMs,
+    showUnknown: config.view.showUnknown,
+    initialCards,
   });
   const commands = new DefaultCommandService(session, transport, git, {
     previewLines: config.activity.terminalPreviewLines,
     previewMaxBytes: config.activity.terminalPreviewMaxBytes,
     popup: mode === 'popup',
   });
-  const compatibility = await checkHerdrCompatibility(runner);
   const startupNotice =
     [compatibility, ...diagnostics.warnings]
       .filter((value): value is string => value !== undefined)
       .join(' · ') || undefined;
+  let preferenceWriteError: string | undefined;
+  let preferenceWrite = Promise.resolve();
+  const savePreferences = async (preferences: ViewPreferences): Promise<void> => {
+    const pending = preferenceWrite.then(async () => saveViewPreferences(configPath, preferences));
+    preferenceWrite = pending.catch((error: unknown) => {
+      preferenceWriteError = errorMessage(error);
+    });
+    await pending;
+    preferenceWriteError = undefined;
+  };
+  const persistStartupCache = async (): Promise<void> => {
+    const snapshot = store.getSnapshot();
+    if (snapshot.connection === 'live') await startupCache.save(snapshot.agents, clock.now());
+  };
   const getDiagnostics = (): RuntimeDiagnostics => ({
     connection: session.getSnapshot().connection,
     transport: transport.getDiagnostics?.(),
     git: git.getDiagnostics?.(),
+    startupCacheError: startupCache.getLastError(),
+    preferenceWriteError,
   });
-  return { store, commands, session, transport, startupNotice, config, mode, getDiagnostics };
+  return {
+    store,
+    commands,
+    session,
+    transport,
+    startupNotice,
+    config,
+    mode,
+    savePreferences,
+    persistStartupCache,
+    getDiagnostics,
+  };
 }

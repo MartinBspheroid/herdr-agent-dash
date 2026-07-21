@@ -4,7 +4,7 @@ import type { ScrollBoxRenderable } from '@opentui/core';
 import type { AgentBoardSnapshot } from '@/contracts';
 import { AgentRow, agentRowId } from '@/ui/AgentRow';
 import type { BoardLayout } from '@/ui/layout';
-import { tableColumns, type TableColumnSpec } from '@/ui/table-layout';
+import { tableColumns, visibleColumnsForLayout, type TableColumnSpec } from '@/ui/table-layout';
 import { BOARD_COLORS } from '@/ui/theme';
 
 /** Render the fixed-header, scrollable agent table and navigation footer. */
@@ -20,7 +20,8 @@ export function AgentTable({
   readonly layout: BoardLayout;
 }): ReactNode {
   const scrollbox = useRef<ScrollBoxRenderable | null>(null);
-  const columns = tableColumns(visibleColumns, layout);
+  const effectiveColumns = visibleColumnsForLayout(visibleColumns, layout);
+  const columns = tableColumns(effectiveColumns, layout);
 
   useEffect(() => {
     if (snapshot.selectedAgentId !== undefined)
@@ -69,7 +70,7 @@ export function AgentTable({
               key={card.id}
               card={card}
               selected={card.id === snapshot.selectedAgentId}
-              visibleColumns={visibleColumns}
+              visibleColumns={effectiveColumns}
               compactPathSegments={compactPathSegments}
               layout={layout}
             />
@@ -129,8 +130,10 @@ function TableFooter({ snapshot }: { readonly snapshot: AgentBoardSnapshot }): R
     >
       <text fg={BOARD_COLORS.textMuted} wrapMode="none" truncate>
         <span fg={BOARD_COLORS.cyan}>↑/↓</span> navigate <span fg={BOARD_COLORS.cyan}>•</span> Enter
-        focus <span fg={BOARD_COLORS.cyan}>•</span> <span fg={BOARD_COLORS.cyan}>s</span> sort{' '}
-        <span fg={BOARD_COLORS.cyan}>•</span> <span fg={BOARD_COLORS.cyan}>/</span> filter
+        focus <span fg={BOARD_COLORS.cyan}>•</span> <span fg={BOARD_COLORS.cyan}>t</span> sort{' '}
+        <span fg={BOARD_COLORS.cyan}>•</span> <span fg={BOARD_COLORS.cyan}>u</span> unknown{' '}
+        <span fg={BOARD_COLORS.cyan}>•</span> <span fg={BOARD_COLORS.cyan}>s</span> small{' '}
+        <span fg={BOARD_COLORS.cyan}>•</span> <span fg={BOARD_COLORS.cyan}>p</span> position
       </text>
       <text fg={BOARD_COLORS.textMuted} wrapMode="none">
         {range}

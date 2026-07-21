@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
 import { DEFAULT_CONFIG, validateConfig } from '@/config/schema';
+import {
+  createFixtureFile,
+  createTempDirectory,
+  removeTempDirectory,
+} from '@tests/fixtures/helpers';
 
 describe('configuration validation', () => {
   test('falls back per invalid field and never enables network access', () => {
@@ -28,5 +33,44 @@ describe('configuration validation', () => {
     const result = validateConfig({ view: { visibleColumns: ['state', 'unknown'] } });
     expect(result.config.view.visibleColumns).toEqual(['state']);
     expect(result.warnings).toContain('view.visibleColumns: unknown columns were removed');
+  });
+
+  test('validates persistent display preferences independently', () => {
+    const result = validateConfig({
+      view: { showUnknown: false, compact: true, detailPosition: 'vertical' },
+    });
+    expect(result.config.view.showUnknown).toBe(false);
+    expect(result.config.view.compact).toBe(true);
+    expect(result.config.view.detailPosition).toBe('vertical');
+  });
+
+  test('persists display preferences without replacing unrelated configuration', async () => {
+    const directory = await createTempDirectory('herdr-board-preferences');
+    const path = `${directory}/config.json`;
+    await createFixtureFile(
+      directory,
+      'config.json',
+      JSON.stringify({ view: { defaultSort: 'state' }, git: { enabled: false } }),
+    );
+    try {
+      const module = await import('@/config/load-config');
+      expect(typeof module.saveViewPreferences).toBe('function');
+      await module.saveViewPreferences(path, {
+        showUnknown: false,
+        compact: true,
+        detailPosition: 'vertical',
+      });
+      const saved = JSON.parse(await Bun.file(path).text()) as {
+        readonly view: Readonly<Record<string, unknown>>;
+        readonly git: Readonly<Record<string, unknown>>;
+      };
+      expect(saved.view.defaultSort).toBe('state');
+      expect(saved.view.showUnknown).toBe(false);
+      expect(saved.view.compact).toBe(true);
+      expect(saved.view.detailPosition).toBe('vertical');
+      expect(saved.git.enabled).toBe(false);
+    } finally {
+      await removeTempDirectory(directory);
+    }
   });
 });

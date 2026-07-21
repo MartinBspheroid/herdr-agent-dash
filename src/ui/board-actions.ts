@@ -6,11 +6,27 @@ import type {
   CommandService,
   OutputPreview,
 } from '@/contracts';
+import type { ViewPreferences } from '@/config/schema';
 
 /** A terminal preview associated with the agent that produced it. */
 export interface OwnedPreview {
   readonly agentId: string;
   readonly preview: OutputPreview;
+}
+
+/** Apply one persistent display shortcut, leaving unrelated keys to the caller. */
+export function preferenceForKey(
+  preferences: ViewPreferences,
+  key: string,
+): ViewPreferences | undefined {
+  if (key === 'u') return { ...preferences, showUnknown: !preferences.showUnknown };
+  if (key === 's') return { ...preferences, compact: !preferences.compact };
+  if (key === 'p')
+    return {
+      ...preferences,
+      detailPosition: preferences.detailPosition === 'horizontal' ? 'vertical' : 'horizontal',
+    };
+  return undefined;
 }
 
 /** Cycle to the next state filter in attention-first order. */

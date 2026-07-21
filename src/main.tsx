@@ -14,8 +14,10 @@ export function parseBoardMode(args: readonly string[]): BoardMode {
 /** Start the OpenTUI board entrypoint. */
 export async function runBoard(args: readonly string[] = process.argv.slice(2)): Promise<void> {
   const requestedMode = args.includes('--mode') ? parseBoardMode(args) : undefined;
-  const runtime = await createBoardRuntime(requestedMode);
-  const renderer = await createCliRenderer({ exitOnCtrlC: true, clearOnShutdown: true });
+  const [runtime, renderer] = await Promise.all([
+    createBoardRuntime(requestedMode),
+    createCliRenderer({ exitOnCtrlC: true, clearOnShutdown: true }),
+  ]);
   createRoot(renderer).render(
     <App
       store={runtime.store}
@@ -23,9 +25,16 @@ export async function runBoard(args: readonly string[] = process.argv.slice(2)):
       mode={runtime.mode}
       config={runtime.config}
       initialNotice={runtime.startupNotice}
+      savePreferences={runtime.savePreferences}
     />,
   );
-  await runtime.store.start().catch(() => undefined);
+  try {
+    await runtime.store.start();
+  } catch (error) {
+    const connection = runtime.store.getSnapshot().connection;
+    if (connection !== 'failed' && connection !== 'incompatible') throw error;
+  }
+  await runtime.persistStartupCache();
 }
 
 if (import.meta.main) {

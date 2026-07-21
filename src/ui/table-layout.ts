@@ -48,6 +48,18 @@ const WIDTHS: Readonly<Record<BoardLayout, Readonly<Record<string, number>>>> = 
   },
 };
 
+const COMPACT_COLUMNS = ['state', 'agent', 'location', 'signal'] as const;
+
+/** Restrict small mode to the four columns that remain actionable at narrow widths. */
+export function visibleColumnsForLayout(
+  visibleColumns: readonly string[],
+  layout: BoardLayout,
+): readonly string[] {
+  if (layout !== 'compact') return visibleColumns;
+  const configured = new Set(visibleColumns);
+  return COMPACT_COLUMNS.filter((column) => configured.has(column));
+}
+
 /** Materialize stable column widths for a responsive board layout. */
 export function tableColumns(
   visibleColumns: readonly string[],

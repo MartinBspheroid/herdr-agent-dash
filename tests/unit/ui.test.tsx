@@ -106,6 +106,7 @@ describe('OpenTUI board surfaces', () => {
       filter: 'all',
       sort: 'attention',
       search: '',
+      showUnknown: true,
       generatedAt: 1,
       message: 'Herdr protocol is unsupported',
     };
@@ -148,6 +149,7 @@ describe('OpenTUI board surfaces', () => {
           filter: 'all',
           sort: 'attention',
           search: '',
+          showUnknown: true,
           generatedAt: 1,
           message: 'This socket has been ended by the other party',
         }}
@@ -218,6 +220,7 @@ describe('OpenTUI board surfaces', () => {
       filter: 'all',
       sort: 'attention',
       search: '',
+      showUnknown: true,
       generatedAt: 1,
     };
     const setup = await testRender(
@@ -285,6 +288,7 @@ describe('OpenTUI board surfaces', () => {
       filter: 'all',
       sort: 'attention',
       search: '',
+      showUnknown: true,
       generatedAt: 1,
       message: 'Showing stale data; reconnecting to Herdr',
     };
