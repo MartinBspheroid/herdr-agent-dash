@@ -12,14 +12,12 @@ export function DetailPanel({
   compactPathSegments = 3,
   now,
   panelWidth,
-  statusMessage,
 }: {
   readonly card: AgentCard | undefined;
   readonly compact: boolean;
   readonly compactPathSegments?: number;
   readonly now: number;
   readonly panelWidth?: number | undefined;
-  readonly statusMessage?: string | undefined;
 }): ReactNode {
   const panelLayout =
     panelWidth === undefined
@@ -57,7 +55,6 @@ export function DetailPanel({
           compactPathSegments={compactPathSegments}
           now={now}
           dividerWidth={dividerWidth}
-          statusMessage={statusMessage}
         />
       )}
     </box>
@@ -70,14 +67,12 @@ function SelectedAgent({
   compactPathSegments,
   now,
   dividerWidth,
-  statusMessage,
 }: {
   readonly card: AgentCard;
   readonly compact: boolean;
   readonly compactPathSegments: number;
   readonly now: number;
   readonly dividerWidth: number;
-  readonly statusMessage: string | undefined;
 }): ReactNode {
   const signal = card.activity.currentSignal;
   const color = stateColor(card.state);
@@ -133,14 +128,6 @@ function SelectedAgent({
       <DetailRow label="repository" value={gitRepository(card)} />
       <DetailRow label="branch" value={gitBranch(card)} />
       <DetailRow label="changes" value={gitChanges(card)} />
-
-      <SectionTitle title="STATUS" dividerWidth={dividerWidth} />
-      <box flexDirection="row" paddingLeft={1} overflow="hidden">
-        <text fg={statusMessage === undefined ? BOARD_COLORS.green : BOARD_COLORS.amber}>◉</text>
-        <text fg={BOARD_COLORS.textMuted} wrapMode="none" truncate>
-          {` ${statusMessage ?? 'Live updates synchronized'}`}
-        </text>
-      </box>
     </>
   );
 }

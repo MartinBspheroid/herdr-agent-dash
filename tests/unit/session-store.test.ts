@@ -1,9 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 
 import { SystemClock } from '@/app/runtime';
-import { BoardError } from '@/app/errors';
 import { LiveSessionStore } from '@/herdr/session-store';
 import { fixtureSnapshot, FixtureTransport } from '@tests/fixtures/herdr';
+import {
+  MutableSnapshotTransport,
+  NoEventsTransport,
+  OrderedSnapshotTransport,
+  ReconnectingTransport,
+  TopologyTransport,
+} from '@tests/fixtures/session-transports';
 
 describe('live session store', () => {
   test('bootstraps, applies status events immediately, and disposes transport', async () => {
@@ -16,6 +22,54 @@ describe('live session store', () => {
     expect(store.getSnapshot().agents.get('a1')?.status).toBe('blocked');
     await store.dispose();
     expect(transport.closed).toBe(true);
+  });
+
+  test('scopes agent-status subscriptions to panes and omits command-only streams', async () => {
+    const transport = new FixtureTransport(fixtureSnapshot);
+    const store = new LiveSessionStore(transport, new SystemClock());
+    await store.start();
+    await waitFor(() => transport.subscriptionRequests.length === 1);
+    const subscriptions = transport.subscriptionRequests[0] ?? [];
+    const statuses = subscriptions.filter(
+      (subscription) => subscription.type === 'pane.agent_status_changed',
+    );
+    expect(statuses).toHaveLength(2);
+    expect(statuses.map((subscription) => subscription.pane_id)).toEqual(['p1', 'p2']);
+    expect(subscriptions.some((subscription) => subscription.type === 'pane.output_matched')).toBe(
+      false,
+    );
+    expect(subscriptions.some((subscription) => subscription.type === 'pane.scroll_changed')).toBe(
+      false,
+    );
+    await store.dispose();
+  });
+
+  test('rebuilds scoped subscriptions when a pane is created', async () => {
+    const transport = new TopologyTransport();
+    const store = new LiveSessionStore(transport, new SystemClock());
+    await store.start();
+    await waitFor(() => transport.streams.length === 1);
+    transport.streams[0]?.push({
+      event: 'pane.created',
+      payload: {
+        pane: {
+          id: 'p3',
+          terminal_id: 'term-3',
+          tab_id: 't1',
+          workspace_id: 'w1',
+          agent_status: 'idle',
+        },
+      },
+    });
+    await waitFor(() => transport.subscriptionRequests.length === 2);
+    expect(
+      transport.subscriptionRequests[1]?.some(
+        (subscription) =>
+          subscription.type === 'pane.agent_status_changed' && subscription.pane_id === 'p3',
+      ),
+    ).toBe(true);
+    expect(store.getSnapshot().connection).toBe('live');
+    await store.dispose();
   });
 
   test('ignores an event with an older revision', async () => {
@@ -112,110 +166,6 @@ describe('live session store', () => {
     expect(transport.closed).toBe(true);
   });
 });
-
-class MutableSnapshotTransport extends FixtureTransport {
-  public snapshotValue: unknown;
-
-  public constructor(snapshot: unknown) {
-    super(snapshot);
-    this.snapshotValue = snapshot;
-  }
-
-  public override async request<T>(method: string, params?: unknown): Promise<T> {
-    if (method === 'session.snapshot') {
-      this.requests.push(method);
-      this.requestCalls.push({ method, params });
-      return this.snapshotValue as T;
-    }
-    return await super.request<T>(method, params);
-  }
-}
-
-class OrderedSnapshotTransport extends FixtureTransport {
-  public pending = 0;
-  private firstResolver: ((value: unknown) => void) | undefined;
-  private secondResolver: ((value: unknown) => void) | undefined;
-
-  public constructor() {
-    super(fixtureSnapshot);
-  }
-
-  public override async request<T>(method: string, params?: unknown): Promise<T> {
-    if (method !== 'session.snapshot') return await super.request<T>(method, params);
-    this.pending += 1;
-    return await new Promise<T>((resolve) => {
-      if (this.pending === 1) this.firstResolver = resolve as (value: unknown) => void;
-      else this.secondResolver = resolve as (value: unknown) => void;
-    });
-  }
-
-  public resolveFirst(value: unknown): void {
-    this.firstResolver?.(value);
-  }
-
-  public resolveSecond(value: unknown): void {
-    this.secondResolver?.(value);
-  }
-}
-
-class ReconnectingTransport extends FixtureTransport {
-  public snapshots = 0;
-  public subscriptions = 0;
-
-  public constructor() {
-    super(fixtureSnapshot);
-  }
-
-  public override async request<T>(method: string): Promise<T> {
-    if (method === 'session.snapshot') {
-      this.snapshots += 1;
-      if (this.snapshots > 1)
-        return {
-          ...fixtureSnapshot,
-          panes: [
-            ...fixtureSnapshot.panes,
-            {
-              id: 'p3',
-              terminal_id: 'term-3',
-              tab_id: 't1',
-              workspace_id: 'w1',
-              agent_id: 'a3',
-              agent: 'Pi',
-              agent_status: 'idle',
-            },
-          ],
-          agents: [...fixtureSnapshot.agents, { id: 'a3', name: 'Pi', status: 'idle' }],
-        } as T;
-    }
-    return await super.request<T>(method);
-  }
-
-  public override async subscribe(): Promise<
-    AsyncIterable<{ readonly event: string; readonly payload: unknown }>
-  > {
-    this.subscriptions += 1;
-    if (this.subscriptions === 1) return { [Symbol.asyncIterator]: async function* () {} };
-    return this.events;
-  }
-}
-
-class NoEventsTransport extends FixtureTransport {
-  public snapshotRequests = 0;
-
-  public override async request<T>(method: string, params?: unknown): Promise<T> {
-    if (method === 'session.snapshot') this.snapshotRequests += 1;
-    return await super.request<T>(method, params);
-  }
-
-  public override async subscribe(): Promise<
-    AsyncIterable<{
-      readonly event: string;
-      readonly payload: unknown;
-    }>
-  > {
-    throw new BoardError('events_unavailable', 'events unavailable in CLI fallback');
-  }
-}
 
 async function waitFor(predicate: () => boolean, attempts = 20, delay = 1): Promise<void> {
   for (let attempt = 0; attempt < attempts; attempt += 1) {

@@ -53,6 +53,38 @@ describe('NDJSON Herdr transport', () => {
     }
   });
 
+  test('opens subscriptions on a dedicated socket after ordinary requests', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'herdr-board-dedicated-events-'));
+    const socketPath = join(directory, 'herdr.sock');
+    const server = createServer((socket) => {
+      let firstMethod: string | undefined;
+      let buffer = '';
+      socket.setEncoding('utf8');
+      socket.on('data', (data: string) => {
+        buffer += data;
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) {
+          if (line.length === 0) continue;
+          const request = JSON.parse(line) as { readonly id: string; readonly method: string };
+          firstMethod ??= request.method;
+          if (request.method === 'events.subscribe' && firstMethod !== 'events.subscribe') continue;
+          socket.write(`${JSON.stringify({ id: request.id, result: {} })}\n`);
+        }
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+    const transport = new NdjsonHerdrTransport(socketPath, { requestTimeoutMs: 25 });
+    try {
+      await transport.request('session.snapshot');
+      await expect(transport.subscribe([{ type: 'pane.updated' }])).resolves.toBeDefined();
+    } finally {
+      await transport.close();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   test('rejects malformed response envelopes', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'herdr-board-malformed-'));
     const socketPath = join(directory, 'herdr.sock');

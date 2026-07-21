@@ -10,6 +10,7 @@ import type {
 } from '@/contracts';
 import { applyHerdrEvent } from '@/herdr/event-reducer';
 import { parseSnapshot } from '@/herdr/protocol';
+import { requiresSubscriptionRebuild, sessionSubscriptions } from '@/herdr/session-subscriptions';
 
 const RECONNECT_DELAYS_MS = [200, 400, 800, 1_600, 3_200, 5_000] as const;
 const MINIMUM_PROTOCOL_VERSION = 1;
@@ -153,15 +154,22 @@ export class LiveSessionStore implements SessionStore {
     let attempt = 0;
     while (this.monitoring && !this.disposed) {
       try {
-        const events = await this.transport.subscribe(EVENT_SUBSCRIPTIONS);
+        const events = await this.transport.subscribe(sessionSubscriptions(this.snapshot));
         await this.refresh();
         if (!this.monitoring || this.disposed) break;
         attempt = 0;
+        let topologyChanged = false;
         for await (const event of events) {
           if (!this.monitoring || this.disposed) break;
           this.applyEvent(event);
+          if (requiresSubscriptionRebuild(event.event)) {
+            topologyChanged = true;
+            events.close();
+            break;
+          }
         }
         if (!this.monitoring || this.disposed) break;
+        if (topologyChanged) continue;
         this.setSnapshot({ ...this.snapshot, connection: 'stale' });
       } catch (error) {
         if (error instanceof BoardError && error.code === 'events_unavailable') {
@@ -207,35 +215,6 @@ export class LiveSessionStore implements SessionStore {
     return paneCount > 0 ? 'stale' : 'failed';
   }
 }
-
-const EVENT_SUBSCRIPTIONS = [
-  { type: 'workspace.created' },
-  { type: 'workspace.updated' },
-  { type: 'workspace.metadata_updated' },
-  { type: 'workspace.renamed' },
-  { type: 'workspace.moved' },
-  { type: 'workspace.closed' },
-  { type: 'workspace.focused' },
-  { type: 'tab.created' },
-  { type: 'tab.closed' },
-  { type: 'tab.focused' },
-  { type: 'tab.renamed' },
-  { type: 'tab.moved' },
-  { type: 'pane.created' },
-  { type: 'pane.updated' },
-  { type: 'pane.closed' },
-  { type: 'pane.focused' },
-  { type: 'pane.moved' },
-  { type: 'pane.exited' },
-  { type: 'pane.agent_detected' },
-  { type: 'pane.output_matched' },
-  { type: 'pane.agent_status_changed' },
-  { type: 'pane.scroll_changed' },
-  { type: 'layout.updated' },
-  { type: 'worktree.created' },
-  { type: 'worktree.opened' },
-  { type: 'worktree.removed' },
-] as const;
 
 function emptySnapshot(): SessionStoreSnapshot {
   return {

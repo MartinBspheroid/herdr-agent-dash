@@ -6,7 +6,7 @@ import type { AgentBoardSnapshot, AgentCard } from '@/contracts';
 import { AgentRow } from '@/ui/AgentRow';
 import { AgentTable } from '@/ui/AgentTable';
 import { DetailPanel } from '@/ui/DetailPanel';
-import { BoardToolbar, StatusBar } from '@/ui/StatusBar';
+import { BoardFooter, BoardToolbar, StatusBar } from '@/ui/StatusBar';
 
 const card: AgentCard = {
   id: 'term-1',
@@ -256,7 +256,6 @@ describe('OpenTUI board surfaces', () => {
         compactPathSegments={3}
         now={1_000}
         panelWidth={56}
-        statusMessage="Reconnecting to Herdr"
       />,
       { width: 56, height: 30 },
     );
@@ -268,8 +267,48 @@ describe('OpenTUI board surfaces', () => {
       expect(frame).toContain('SELECTED AGENT');
       expect(frame).toContain('SIGNAL');
       expect(frame).toContain('GIT');
-      expect(frame).toContain('STATUS');
-      expect(frame).toContain('Reconnecting to Herdr');
+      expect(frame).not.toContain('STATUS');
+    } finally {
+      act(() => {
+        setup.renderer.destroy();
+      });
+    }
+  });
+
+  test('shows reconnect state only once in the top header', async () => {
+    const snapshot: AgentBoardSnapshot = {
+      connection: 'stale',
+      agents: [card],
+      visibleAgents: [card],
+      selectedAgentId: card.id,
+      attentionCount: 1,
+      filter: 'all',
+      sort: 'attention',
+      search: '',
+      generatedAt: 1,
+      message: 'Showing stale data; reconnecting to Herdr',
+    };
+    const setup = await testRender(
+      <box flexDirection="column">
+        <StatusBar snapshot={snapshot} />
+        <BoardToolbar
+          snapshot={snapshot}
+          notice={undefined}
+          searching={false}
+          onSearch={() => undefined}
+          onSubmit={() => undefined}
+        />
+        <DetailPanel card={card} compact={false} now={snapshot.generatedAt} panelWidth={56} />
+        <BoardFooter snapshot={snapshot} />
+      </box>,
+      { width: 180, height: 40 },
+    );
+    try {
+      await act(async () => {
+        await setup.flush();
+      });
+      const matches = setup.captureCharFrame().match(/reconnect/gi) ?? [];
+      expect(matches).toHaveLength(1);
     } finally {
       act(() => {
         setup.renderer.destroy();

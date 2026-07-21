@@ -16,7 +16,7 @@ import {
 import { DetailPanel } from '@/ui/DetailPanel';
 import { Help } from '@/ui/Help';
 import { layoutForWidth } from '@/ui/layout';
-import { BoardFooter, BoardToolbar, StatusBar, visibleStatusMessage } from '@/ui/StatusBar';
+import { BoardFooter, BoardToolbar, StatusBar } from '@/ui/StatusBar';
 import { BOARD_COLORS } from '@/ui/theme';
 
 /** Board mode controls popup close behavior while keeping the view shared. */
@@ -97,7 +97,6 @@ export function App({
       compactPathSegments={config.view.compactPathSegments}
       now={snapshot.generatedAt}
       panelWidth={wide ? DETAIL_PANEL_WIDTH : undefined}
-      statusMessage={visibleStatusMessage(snapshot, notice)}
     />
   );
 

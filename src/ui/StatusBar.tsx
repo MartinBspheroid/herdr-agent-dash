@@ -124,16 +124,19 @@ export function BoardToolbar({
           wrapMode="none"
           truncate
         >
-          {message === undefined ? '◉  Live updates synchronized' : `⌁  ${message}`}
+          {message === undefined
+            ? snapshot.connection === 'live'
+              ? '◉  Live updates synchronized'
+              : ''
+            : `⌁  ${message}`}
         </text>
       </box>
     </box>
   );
 }
 
-/** Render the fixed footer with redundant connection text and clock. */
+/** Render the fixed footer with application identity and clock. */
 export function BoardFooter({ snapshot }: { readonly snapshot: AgentBoardSnapshot }): ReactNode {
-  const color = connectionColor(snapshot.connection);
   const time = new Date(snapshot.generatedAt).toLocaleTimeString('en-GB', { hour12: false });
   return (
     <box
@@ -150,8 +153,6 @@ export function BoardFooter({ snapshot }: { readonly snapshot: AgentBoardSnapsho
         Herdr │ Agent Board
       </text>
       <text fg={BOARD_COLORS.textMuted} wrapMode="none">
-        <span fg={color}>{connectionWord(snapshot.connection)}</span>
-        {`  │  Live: ${snapshot.connection === 'live' ? 'current' : 'stale'}  │  `}
         <span fg={BOARD_COLORS.cyan}>{time}</span>
       </text>
     </box>
@@ -165,9 +166,7 @@ export function visibleStatusMessage(
 ): string | undefined {
   const visibleNotice = shouldShowNotice(snapshot.connection, notice) ? notice : undefined;
   const snapshotMessage =
-    snapshot.connection === 'live' &&
-    snapshot.message !== undefined &&
-    isTransportNotice(snapshot.message)
+    snapshot.message !== undefined && isTransportNotice(snapshot.message)
       ? undefined
       : snapshot.message;
   return snapshotMessage ?? visibleNotice;
@@ -206,7 +205,7 @@ function shouldShowNotice(connection: ConnectionState, notice: string | undefine
 }
 
 function isTransportNotice(notice: string): boolean {
-  return /\b(?:socket|transport|connection|reconnect)\b/i.test(notice);
+  return /\b(?:socket|transport|connection|reconnect(?:ed|ing|ion)?)\b/i.test(notice);
 }
 
 function formatFilter(filter: AgentBoardSnapshot['filter']): string {
@@ -215,14 +214,6 @@ function formatFilter(filter: AgentBoardSnapshot['filter']): string {
 
 function formatSort(sort: AgentBoardSnapshot['sort']): string {
   return sort === 'recent' ? 'recent activity' : sort;
-}
-
-function connectionWord(connection: ConnectionState): string {
-  return connection === 'live'
-    ? 'Connected'
-    : connection === 'failed'
-      ? 'Disconnected'
-      : 'Reconnecting';
 }
 
 function connectionLabel(connection: ConnectionState): string {

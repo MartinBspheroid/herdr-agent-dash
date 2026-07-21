@@ -1,5 +1,10 @@
 import { BoardError } from '@/app/errors';
-import type { EventSubscription, HerdrEvent, HerdrTransport, ProcessRunner } from '@/contracts';
+import type {
+  EventSubscription,
+  HerdrEventStream,
+  HerdrTransport,
+  ProcessRunner,
+} from '@/contracts';
 import { errorMessage } from '@/app/errors';
 
 const DEFAULT_PREVIEW_LINES = 30;
@@ -35,9 +40,7 @@ export class CliHerdrTransport implements HerdrTransport {
   }
 
   /** CLI fallback cannot provide an event stream, so fail with an actionable message. */
-  public async subscribe(
-    _subscriptions: readonly EventSubscription[],
-  ): Promise<AsyncIterable<HerdrEvent>> {
+  public async subscribe(_subscriptions: readonly EventSubscription[]): Promise<HerdrEventStream> {
     throw new BoardError(
       'events_unavailable',
       'Herdr CLI fallback does not support live event subscriptions',

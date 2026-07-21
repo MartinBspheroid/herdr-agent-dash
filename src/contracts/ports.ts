@@ -49,9 +49,14 @@ export interface CurrentAgentTarget {
 /** A minimal socket/CLI transport shared by live and fake clients. */
 export interface HerdrTransport {
   request<T>(method: string, params?: unknown): Promise<T>;
-  subscribe(subscriptions: readonly EventSubscription[]): Promise<AsyncIterable<HerdrEvent>>;
+  subscribe(subscriptions: readonly EventSubscription[]): Promise<HerdrEventStream>;
   close(): Promise<void>;
   getDiagnostics?(): TransportDiagnostics;
+}
+
+/** A closeable long-lived event stream owned by its transport. */
+export interface HerdrEventStream extends AsyncIterable<HerdrEvent> {
+  close(): void;
 }
 
 /** In-memory transport health counters safe to expose to diagnostics. */

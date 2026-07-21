@@ -7,11 +7,12 @@ import { AgentProjector } from '@/domain/agent-projector';
 import type { GitEnricher, GitRefreshReason } from '@/git/git-enricher';
 import type { GitContext } from '@/contracts';
 import { LiveSessionStore } from '@/herdr/session-store';
-import { fixtureSnapshot, FixtureTransport } from '@tests/fixtures/herdr';
+import { fixtureSnapshot } from '@tests/fixtures/herdr';
+import { MutableSnapshotTransport } from '@tests/fixtures/session-transports';
 
 describe('renderer-independent board store', () => {
   test('keeps selection across unrelated updates and reconciles a closed row', async () => {
-    const transport = new FixtureTransport(fixtureSnapshot);
+    const transport = new MutableSnapshotTransport(fixtureSnapshot);
     const session = new LiveSessionStore(transport, new SystemClock());
     const git = new RecordingGitEnricher();
     const projector = new AgentProjector(git, new ActivityEngine([]), new SystemClock());
@@ -27,6 +28,11 @@ describe('renderer-independent board store', () => {
     await waitFor(() => git.invalidations.length > 0);
     expect(git.invalidations).toContain('/tmp/project');
 
+    transport.snapshotValue = {
+      ...fixtureSnapshot,
+      panes: fixtureSnapshot.panes.filter((pane) => 'id' in pane && pane.id !== 'p1'),
+      agents: fixtureSnapshot.agents.filter((agent) => 'id' in agent && agent.id !== 'a1'),
+    };
     transport.emit('pane.closed', { pane_id: 'p1' });
     await waitFor(() => store.getSnapshot().agents.length === 1);
     expect(store.getSnapshot().selectedAgentId).toBe('term-2');
@@ -35,7 +41,8 @@ describe('renderer-independent board store', () => {
 });
 
 async function waitFor(predicate: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
+  const deadline = Date.now() + 500;
+  while (Date.now() < deadline) {
     if (predicate()) return;
     await new Promise<void>((resolve) => setTimeout(resolve, 2));
   }

@@ -3,11 +3,11 @@ import { createConnection, type Socket } from 'node:net';
 import { BoardError, errorMessage } from '@/app/errors';
 import type {
   EventSubscription,
-  HerdrEvent,
+  HerdrEventStream,
   HerdrTransport,
   TransportDiagnostics,
 } from '@/contracts';
-import { AsyncQueue } from '@/herdr/async-queue';
+import { NdjsonEventStream, type EventStreamDiagnostic } from '@/herdr/ndjson-event-stream';
 import { parseProtocolLine } from '@/herdr/protocol';
 
 interface PendingRequest {
@@ -30,7 +30,6 @@ const DEFAULT_MAX_EVENT_QUEUE = 1_024;
 /** Unix-socket NDJSON transport with request correlation and event streaming. */
 export class NdjsonHerdrTransport implements HerdrTransport {
   private readonly pending = new Map<string, PendingRequest>();
-  private events = new AsyncQueue<HerdrEvent>();
   private socketPromise: Promise<Socket> | undefined;
   private socket: Socket | undefined;
   private sequence = 0;
@@ -43,14 +42,13 @@ export class NdjsonHerdrTransport implements HerdrTransport {
   private queueOverflowCount = 0;
   private disconnectCount = 0;
   private lastError: string | undefined;
+  private readonly eventStreams = new Set<NdjsonEventStream>();
 
   /** Create a transport for a Herdr Unix socket with explicit resource limits. */
   public constructor(
     private readonly socketPath: string,
     private readonly options: NdjsonTransportOptions = {},
-  ) {
-    this.events = new AsyncQueue(this.options.maxEventQueue ?? DEFAULT_MAX_EVENT_QUEUE);
-  }
+  ) {}
 
   /** Send one correlated request and resolve its result payload. */
   public async request<T>(method: string, params?: unknown): Promise<T> {
@@ -82,17 +80,24 @@ export class NdjsonHerdrTransport implements HerdrTransport {
   }
 
   /** Subscribe to normalized events after acknowledging the server subscription. */
-  public async subscribe(
-    subscriptions: readonly EventSubscription[],
-  ): Promise<AsyncIterable<HerdrEvent>> {
-    await this.request('events.subscribe', { subscriptions });
-    return this.events;
+  public async subscribe(subscriptions: readonly EventSubscription[]): Promise<HerdrEventStream> {
+    const stream = new NdjsonEventStream(this.socketPath, subscriptions, {
+      requestTimeoutMs: this.options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+      maxFrameBytes: this.options.maxFrameBytes ?? DEFAULT_MAX_FRAME_BYTES,
+      maxEventQueue: this.options.maxEventQueue ?? DEFAULT_MAX_EVENT_QUEUE,
+      onDiagnostic: (kind, message) => this.recordEventDiagnostic(kind, message),
+      onClose: () => this.eventStreams.delete(stream),
+    });
+    await stream.start();
+    this.eventStreams.add(stream);
+    return stream;
   }
 
   /** Close the socket and resolve all event consumers. */
   public async close(): Promise<void> {
     this.closed = true;
-    this.events.close();
+    for (const stream of this.eventStreams) stream.close();
+    this.eventStreams.clear();
     const socket = await this.socketPromise?.catch(() => undefined);
     socket?.destroy();
     const error = new BoardError('transport_closed', 'Herdr transport was closed');
@@ -123,13 +128,9 @@ export class NdjsonHerdrTransport implements HerdrTransport {
       });
       socket.on('close', () => {
         this.disconnectCount += 1;
-        this.events.close();
         this.buffer = '';
         this.socket = undefined;
         if (!this.closed) {
-          this.events = new AsyncQueue<HerdrEvent>(
-            this.options.maxEventQueue ?? DEFAULT_MAX_EVENT_QUEUE,
-          );
           this.socketPromise = undefined;
         }
         this.rejectPending(new BoardError('transport_disconnected', 'Herdr socket disconnected'));
@@ -195,15 +196,6 @@ export class NdjsonHerdrTransport implements HerdrTransport {
         } else {
           pending.resolve(parsed.result);
         }
-      } else {
-        const accepted = this.events.push(parsed);
-        if (!accepted) {
-          this.queueOverflowCount += 1;
-          const error = new BoardError('transport_overloaded', 'Herdr event queue is full');
-          this.lastError = error.message;
-          this.rejectPending(error);
-          this.socket?.destroy();
-        }
       }
     }
   }
@@ -219,9 +211,14 @@ export class NdjsonHerdrTransport implements HerdrTransport {
   /** Return bounded live counters without exposing socket paths or payloads. */
   public getDiagnostics(): TransportDiagnostics {
     return {
-      connected: this.socketPromise !== undefined && !this.closed,
+      connected:
+        (this.socketPromise !== undefined && !this.closed) ||
+        [...this.eventStreams].some((stream) => stream.connected),
       pendingRequests: this.pending.size,
-      queuedEvents: this.events.size,
+      queuedEvents: [...this.eventStreams].reduce(
+        (total, stream) => total + stream.queuedEvents,
+        0,
+      ),
       requestCount: this.requestCount,
       timeoutCount: this.timeoutCount,
       malformedCount: this.malformedCount,
@@ -230,5 +227,13 @@ export class NdjsonHerdrTransport implements HerdrTransport {
       disconnectCount: this.disconnectCount,
       lastError: this.lastError,
     };
+  }
+
+  private recordEventDiagnostic(kind: EventStreamDiagnostic, message?: string): void {
+    if (kind === 'disconnected') this.disconnectCount += 1;
+    else if (kind === 'malformed') this.malformedCount += 1;
+    else if (kind === 'overflow') this.queueOverflowCount += 1;
+    else if (kind === 'frame_limit') this.frameLimitCount += 1;
+    if (message !== undefined) this.lastError = message;
   }
 }

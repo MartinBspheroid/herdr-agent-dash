@@ -1,4 +1,4 @@
-import type { HerdrTransport } from '@/contracts';
+import type { EventSubscription, HerdrEventStream, HerdrTransport } from '@/contracts';
 import { AsyncQueue } from '@/herdr/async-queue';
 
 /** Minimal fixture snapshot containing two agents and one malformed record. */
@@ -51,6 +51,7 @@ export class FixtureTransport implements HerdrTransport {
   public readonly requests: string[] = [];
   public readonly requestCalls: Array<{ readonly method: string; readonly params: unknown }> = [];
   public subscribeCalls = 0;
+  public readonly subscriptionRequests: Array<readonly EventSubscription[]> = [];
   public closed = false;
   public readOutput = '';
 
@@ -67,10 +68,9 @@ export class FixtureTransport implements HerdrTransport {
   }
 
   /** Expose the shared fixture event queue. */
-  public async subscribe(): Promise<
-    AsyncIterable<{ readonly event: string; readonly payload: unknown }>
-  > {
+  public async subscribe(subscriptions: readonly EventSubscription[]): Promise<HerdrEventStream> {
     this.subscribeCalls += 1;
+    this.subscriptionRequests.push(subscriptions);
     return this.events;
   }
 
